@@ -144,6 +144,7 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg)
 {
 	s_println("setup_CTC_timer(%d, %d, 0x%x, 0x%x)", whichTimer, frequency, func, arg);
+	KASSERT(whichTimer == 0);
 
 	long freq = kClockFrequency;
 	long ltop = 0;

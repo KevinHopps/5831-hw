@@ -2,6 +2,9 @@
 #include "kserial.h"
 #include "ktimers.h"
 
+// This function is called by the timer interrupt routine
+// that is setup by setup_CTC_timer, called by main().
+//
 void callback_function(void* arg)
 {
 	long* n = (long*)arg;
@@ -10,8 +13,6 @@ void callback_function(void* arg)
 
 int main()
 {
-	s_println("main");
-	int counter = 0;
 	long nextBreak = 1000;
 	volatile long callback_count = 0;
 
@@ -25,16 +26,16 @@ int main()
 
 	setup_CTC_timer(whichTimer, frequency, func, arg);
 
-	delay_ms(5000);
 	s_println("sei()");
 
 	sei();	// enable interrupts
 
-	while (1)
+	int counter = 0;
+	for (counter = 0; ; ++counter)
 	{
 		while (callback_count < nextBreak)
 			continue;
 		nextBreak += 1000;
-		s_println("callback_count %ld", callback_count);
+		s_println("%d: callback_count %ld", counter, callback_count);
 	}
 }
