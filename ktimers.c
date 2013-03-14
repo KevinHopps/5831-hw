@@ -6,7 +6,7 @@
 static const int kMinPrescaleIndex = 1;
 static const int kPrescaleFrequency[] = { 0, 1, 8, 64, 256, 1024 };
 static const int kMaxPrescaleIndex = sizeof(kPrescaleFrequency) / sizeof(*kPrescaleFrequency) - 1;
-static const long kClockFrequency = 20L * 1000L * 1000L;
+static const uint32_t kClockFrequency = 20L * 1000L * 1000L;
 
 #define kNumTimers 4
 static CallbackInfo callbackInfo[kNumTimers];
@@ -146,8 +146,8 @@ CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void*
 	s_println("setup_CTC_timer(%d, %d, 0x%x, 0x%x)", whichTimer, frequency, func, arg);
 	KASSERT(whichTimer == 0);
 
-	long freq = kClockFrequency;
-	long ltop = 0;
+	uint32_t freq = kClockFrequency;
+	uint32_t ltop = 0;
 	int prescaleIndex = kMinPrescaleIndex;
 	int done = 0;
 	while (!done)
