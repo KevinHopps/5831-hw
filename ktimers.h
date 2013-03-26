@@ -13,7 +13,8 @@ typedef struct CallbackInfo_
 //     func(arg)
 // frequency times per second.
 //
-// NOTE: Currently, whichTimer must be 0.
+// NOTE: Currently, whichTimer must be 0. This is because there are different
+// tables to use for different timers.
 //
 CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg);
 
