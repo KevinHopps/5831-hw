@@ -1,0 +1,4 @@
+Plus button should bring user to the edit screen.
+Make sure that adding a new contact doesn't put old stuff in the edit screen.
+Need some way to cancel an edit, whether you got there by the plus sign vs. editing an existing one.
+In the edit screen the "Detail" button should say "Save". Add a cancel button on the right.

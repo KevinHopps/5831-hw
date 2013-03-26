@@ -6,7 +6,9 @@ DEVICE ?= atmega168
 MCU ?= atmega168
 AVRDUDE_DEVICE ?= m168
 
-CFLAGS=-g -Wall -mcall-prologues -mmcu=$(MCU) $(DEVICE_SPECIFIC_CFLAGS) -Os
+OPTIMIZE ?= -Os
+CF ?= $(OPTIMIZE)
+CFLAGS=-g -Wall -mcall-prologues -mmcu=$(MCU) $(DEVICE_SPECIFIC_CFLAGS) $(CF)
 CC=avr-gcc
 OBJ2HEX=avr-objcopy 
 LDFLAGS=-Wl,-gc-sections -lpololu_$(DEVICE) -Wl,-relax
@@ -14,7 +16,7 @@ LDFLAGS=-Wl,-gc-sections -lpololu_$(DEVICE) -Wl,-relax
 PORT ?= /dev/ttyACM0
 AVRDUDE=avrdude
 
-LIB = kserial.o ktimers.o kdebug.o
+LIB = kserial.o ktimers.o kdebug.o kio.o
 
 all: asgn1.hex stop.hex
 

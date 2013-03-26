@@ -1,3 +1,108 @@
+#define KEVIN 0
+#define AMY 1
+#define CHOICE KEVIN
+#if CHOICE == KEVIN
+#include <pololu/orangutan.h>
+#include "kio.h"
+#include "kserial.h"
+#include "ktimers.h"
+
+#define RED_PIN IO_C0
+#define YELLOW_PIN IO_A0
+#define GREEN_PIN IO_D5
+
+// PD5 is OC1A? Need to set DDRD pin 5 output1
+// CTC = clear timer on compare match
+// PWM = Pulse Width Modulation
+// Setup a 16-bit timer counter with PWM to toggle an LED without using software.
+// See table page 132-134.
+//
+void spin(volatile int32_t n)
+{
+	while (--n >= 0)
+		continue;
+}
+
+static const uint32_t kLoopsPerSec = 2L * 424852L; // by experiment -- see spinCount.c
+
+void kdelay_ms(int ms)
+{
+	spin((kLoopsPerSec * ms) / 1000);
+}
+
+void busy_blink(int nsec)
+{
+	KIORegs io = getIORegs(RED_PIN);
+	s_println("busy_blink");
+	setDataDir(&io, OUTPUT);
+	int value = 1;
+	nsec *= 2;
+	while (--nsec >= 0)
+	{
+		setIOValue(&io, value);
+		value ^= 1;
+		kdelay_ms(500);
+	}
+	set_digital_output_value(&io, 0);
+}
+
+// This function is called by the timer interrupt routine
+// that is setup by setup_CTC_timer, called by main().
+//
+static void ctc_callback(void* arg)
+{
+	uint32_t* n = (uint32_t*)arg;
+	++(*n);
+}
+
+void ctc_blink(int nsec)
+{
+	struct IOStruct io;
+	get_io_registers(&io, YELLOW_PIN);
+	volatile uint32_t callback_count = 0;
+
+	int whichTimer = 0;
+	int frequency = 1000;
+	Callback func = ctc_callback;
+	void* arg = &callback_count;
+
+	s_println("calling setup_CTC_timer(%d, %d, 0x%x, 0x%x)",
+		whichTimer, frequency, func, arg);
+
+	setup_CTC_timer(whichTimer, frequency, func, arg);
+
+	s_println("sei()");
+	sei();	// enable interrupts
+
+	uint32_t nextBreak = 500;
+	int value = 1;
+	set_data_direction(&io, OUTPUT);
+	set_digital_output_value(&io, value);
+	nsec *= 2;
+	while (--nsec >= 0)
+	{
+		value ^= 1;
+		set_digital_output_value(&io, value);
+		while (callback_count < nextBreak)
+			continue;
+		nextBreak += 500;
+	}
+	set_digital_output_value(&io, 0);
+
+	cli(); // disable interrupts
+}
+
+int main()
+{
+	s_println("Hello");
+	int nsec = 5;
+	while (1)
+	{
+		ctc_blink(nsec);
+		busy_blink(nsec);
+	}
+}
+#else // #if CHOICE == KEVIN
 #define ECHO2LCD
 
 #include <pololu/orangutan.h>
@@ -114,3 +219,4 @@ int main(void) {
 	} //end while loop
 } //end main
 
+#endif // #if CHOICE == KEVIN
