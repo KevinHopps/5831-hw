@@ -26,9 +26,6 @@ void set_TCCRn(int n, int com0a, int com0b, int wgm, int foc0a, int foc0b, int c
 	int a = TCCRnA(com0a, com0b, wgm);
 	int b = TCCRnB(foc0a, foc0b, wgm, cs);
 
-	s_println("TCCR%dA=0x%02x", n, a);
-	s_println("TCCR%dB=0x%02x", n, b);
-
 	switch (n)
 	{
 		case 0:
@@ -59,8 +56,6 @@ void set_TCCRn(int n, int com0a, int com0b, int wgm, int foc0a, int foc0b, int c
 
 void set_OCRnA(int n, int val)
 {
-	s_println("OCR%dA=0x%x=%d", n, val, val);
-	
 	switch (n)
 	{
 		case 0:
@@ -98,7 +93,6 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 				val |= 1 << OCIE0B;
 			if (toieN)
 				val |= 1 << TOIE0;
-			s_println("TIMSK%d=0x%02x=%d", n, val, val);
 			TIMSK0 = val;
 			break;
 
@@ -109,7 +103,6 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 				val |= 1 << OCIE1B;
 			if (toieN)
 				val |= 1 << TOIE1;
-			s_println("TIMSK%d=0x%02x=%d", n, val, val);
 			TIMSK1 = val;
 			break;
 
@@ -120,7 +113,6 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 				val |= 1 << OCIE2B;
 			if (toieN)
 				val |= 1 << TOIE2;
-			s_println("TIMSK%d=0x%02x=%d", n, val, val);
 			TIMSK2 = val;
 			break;
 
@@ -131,7 +123,6 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 				val |= 1 << OCIE3B;
 			if (toieN)
 				val |= 1 << TOIE3;
-			s_println("TIMSK%d=0x%02x=%d", n, val, val);
 			TIMSK3 = val;
 			break;
 
@@ -143,7 +134,6 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 
 CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg)
 {
-	s_println("setup_CTC_timer(%d, %d, 0x%x, 0x%x)", whichTimer, frequency, func, arg);
 	KASSERT(whichTimer == 0);
 
 	uint32_t freq = kClockFrequency;
@@ -162,7 +152,6 @@ CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void*
 	}
 
 	int top = (int)ltop;
-	s_println("prescale[%d]=%d, top=%d", prescaleIndex, kPrescaleFrequency[prescaleIndex], top);
 
 	int com0a = 0;
 	int com0b = 0;
