@@ -1,4 +1,5 @@
 #include <pololu/orangutan.h>
+#include <string.h>
 #include "kio.h"
 #include "kserial.h"
 #include "ktimers.h"
@@ -70,9 +71,22 @@ static void timerCallback(void* arg)
 
 int main()
 {
-	char cmdbuf[32];
-	char* cmd_next = cmdbuf;
-	char* cmd_eob = cmdbuf + sizeof(cmdbuf);
+	LineBuf lbuf;
+	LBReset(&lbuf);
+	int done = 0;
+	while (!done)
+	{
+		int oldLen = LBLength(&lbuf);
+		const char* line = LBGetLine(&lbuf);
+		int newLen = LBLength(&lbuf);
+		if (line != 0)
+		{
+			s_println("LBGetLine returns '%s'", line);
+			if (strcmp(line, "go") == 0)
+				done = 1;
+		}
+	}
+
 	int blinkHz = 1;
 
 	int nsec = 5;
@@ -84,7 +98,7 @@ int main()
 	int whichTimer = 0;
 	int timerHz = 1000;
 	volatile uint32_t timerCount = 0;
-	setup_CTC_timer(whichTimer, timerHz, timerCallback, &timerCount);
+	setup_CTC_timer(whichTimer, timerHz, timerCallback, (void*)&timerCount);
 
 	int redReleaseInterval = timerHz / (2 * blinkHz);
 	uint32_t redNextRelease = 0;

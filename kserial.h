@@ -22,4 +22,22 @@ extern const char s_eol[];
 
 extern int s_println(const char* fmt, ...); // s_printf plus s_eol
 
+struct LineBuf_
+{
+	char m_buf[32];
+	uint8_t m_len;
+	uint8_t m_frozen;
+};
+typedef struct LineBuf_ LineBuf;
+
+extern void LBReset(LineBuf* lbuf);
+extern int LBLength(const LineBuf* lbuf);
+extern int LBCharAt(const LineBuf* lbuf, int index);
+
+// This will possibly read characters into lbuf->m_buf each
+// time it is called. When it receives a '\r' it will trim
+// it and return lbuf->m_buf. Otherwise it will return 0.
+//
+extern const char* LBGetLine(LineBuf* lbuf);
+
 #endif // #ifndef _kserial_h_
