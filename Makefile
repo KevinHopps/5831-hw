@@ -16,7 +16,14 @@ LDFLAGS=-Wl,-gc-sections -lpololu_$(DEVICE) -Wl,-relax
 PORT ?= /dev/ttyACM0
 AVRDUDE=avrdude
 
-LIB = kserial.o ktimers.o kdebug.o kio.o
+LIB= \
+	kcmd.o \
+	kdebug.o \
+	kio.o \
+	klinebuf.o \
+	kserial.o \
+	ktimers.o \
+	kutils.o \
 
 all: asgn1.hex stop.hex
 
