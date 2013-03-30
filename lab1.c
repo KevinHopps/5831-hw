@@ -123,7 +123,7 @@ int main()
 	int redTimer = 0;
 	int redHz = 1000;
 	volatile uint32_t redCount = 0;
-	setup_CTC_timer(redTimer, redHz, redCallback, (void*)&redCount);
+	setup_CTC_timer0(redHz, redCallback, (void*)&redCount);
 
 	int redReleaseInterval = redHz / (2 * blinkHz);
 	uint32_t redNextRelease = 0;
