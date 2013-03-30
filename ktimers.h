@@ -3,12 +3,6 @@
 
 typedef void (*Callback)(void* arg);
 
-typedef struct CallbackInfo_
-{
-	Callback m_func;
-	void* m_arg;
-} CallbackInfo;
-
 // This will setup a timer with an interrupt handler that will invoke
 //     func(arg)
 // frequency times per second.
@@ -16,7 +10,9 @@ typedef struct CallbackInfo_
 // NOTE: Currently, whichTimer must be 0. This is because there are different
 // tables to use for different timers.
 //
-CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg);
+void setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg);
+
+void setup_CTC_timer3(int frequency, Callback func, void* arg);
 
 void set_TCCRn(int n, int com0a, int com0b, int wgm, int foc0a, int foc0b, int cs);
 void set_OCRnA(int n, int val);

@@ -1,4 +1,5 @@
 #include <pololu/orangutan.h>
+#include <stdlib.h>
 #include <string.h>
 #include "kcmd.h"
 #include "kio.h"
@@ -6,6 +7,12 @@
 #include "kserial.h"
 #include "ktimers.h"
 #include "kutils.h"
+
+#define kRED 0
+#define kYELLOW 1
+#define kGREEN 2
+#define kALL 3
+#define kNCOLORS 3
 
 #define RED_PIN IO_C1
 #define YELLOW_PIN IO_A0
@@ -46,6 +53,9 @@ void busy_blink(int nsec, int blinkHz, int pin)
 	set_digital_output_value(&io, 0);
 }
 
+uint32_t counter[kNCOLORS];
+int period[kNCOLORS];
+
 void redTask()
 {
 	static KIORegs* iop = 0;
@@ -62,43 +72,64 @@ void redTask()
 	setIOValue(iop, ++count & 1);
 }
 
+static uint32_t counters[3];
+static int frequency[3];
+
 // This function is called by the timer interrupt routine
 // that is setup by setup_CTC_timer, called by main().
 //
-static void timerCallback(void* arg)
+static void redCallback(void* arg)
 {
 	uint32_t* n = (uint32_t*)arg;
 	++(*n);
+}
+
+static void yellowCallback(void* arg)
+{
+	static KIORegs* iop = 0;
+	static int count = 0;
+	if (iop == 0)
+	{
+		static KIORegs ios;
+		ios = getIORegs(YELLOW_PIN);
+		iop = &ios;
+		setDataDir(iop, OUTPUT);
+		setIOValue(iop, 0);
+	}
+
+	setIOValue(iop, ++count & 1);
 }
 
 extern int toggle_cmd(int argc, char** argv);
 extern int zero_cmd(int argc, char** argv);
 extern int print_cmd(int argc, char** argv);
 
-const char kRED[] = "red";
-const char kGREEN[] = "green";
-const char kYELLOW[] = "yellow";
-const char kALL[] = "all";
-const char* const colorNames[] = { kRED, kGREEN, kYELLOW, kALL };
+const char* const colorNames[] = { "red", "green", "yellow", "all" };
 int colorNameCount = sizeof(colorNames) / sizeof(*colorNames);
 
 int main()
 {
 	int blinkHz = 1;
+	//int nsec = 5;
+	//s_println("Busy blink yellow LED at %d Hz for %d seconds", blinkHz, nsec);
+	//busy_blink(nsec, blinkHz, YELLOW_PIN);
 
-	int nsec = 5;
-	s_println("Busy blink yellow LED at %d Hz for %d seconds", blinkHz, nsec);
-	busy_blink(nsec, blinkHz, YELLOW_PIN);
+	frequency[kRED] = 1;
+	frequency[kYELLOW] = 10;
+	frequency[kGREEN] = 1;
 
 	s_println("Setup CTC timer");
 
-	int whichTimer = 0;
-	int timerHz = 1000;
-	volatile uint32_t timerCount = 0;
-	setup_CTC_timer(whichTimer, timerHz, timerCallback, (void*)&timerCount);
+	int redTimer = 0;
+	int redHz = 1000;
+	volatile uint32_t redCount = 0;
+	setup_CTC_timer(redTimer, redHz, redCallback, (void*)&redCount);
 
-	int redReleaseInterval = timerHz / (2 * blinkHz);
+	int redReleaseInterval = redHz / (2 * blinkHz);
 	uint32_t redNextRelease = 0;
+
+	int yellowHz = 10;
+	setup_CTC_timer3(yellowHz, yellowCallback, (void*)0);
 
 	sei(); // enable interrupts
 
@@ -115,7 +146,7 @@ int main()
 		if (CIOCheckForCommand(&cio))
 			CIORunCommand(&cio);
 
-		if (timerCount >= redNextRelease)
+		if (redCount >= redNextRelease)
 		{
 			redTask();
 			redNextRelease += redReleaseInterval;

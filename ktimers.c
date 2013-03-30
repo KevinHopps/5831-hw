@@ -3,6 +3,12 @@
 #include "ktimers.h"
 #include "kdebug.h"
 
+typedef struct CallbackInfo_
+{
+	Callback m_func;
+	void* m_arg;
+} CallbackInfo;
+
 static const int kMinPrescaleIndex = 1;
 static const int kPrescaleFrequency[] = { 0, 1, 8, 64, 256, 1024 };
 static const int kMaxPrescaleIndex = sizeof(kPrescaleFrequency) / sizeof(*kPrescaleFrequency) - 1;
@@ -132,36 +138,58 @@ void set_TIMSKn(int n, int ocieNa, int ocieNb, int toieN)
 	}
 }
 
-CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg)
+struct TimerSetup_
 {
-	KASSERT(whichTimer == 0);
+	uint8_t m_cs;
+	uint16_t m_top;
+};
+typedef struct TimerSetup_ TimerSetup;
+
+static TimerSetup calculate_prescale_and_top(uint16_t frequency, uint16_t maxTop)
+{
+	TimerSetup result = { 0, 0 };
 
 	uint32_t freq = kClockFrequency;
 	uint32_t ltop = 0;
-	int prescaleIndex = kMinPrescaleIndex;
+	result.m_cs = kMinPrescaleIndex;
 	int done = 0;
 	while (!done)
 	{
-		int prescale = kPrescaleFrequency[prescaleIndex];
+		int prescale = kPrescaleFrequency[result.m_cs];
 		freq = kClockFrequency / prescale;
 		ltop = freq / frequency;
-		if (prescaleIndex >= kMaxPrescaleIndex || ltop < 256)
+		if (result.m_cs >= kMaxPrescaleIndex || ltop <= maxTop)
 			done = 1;
 		else
-			++prescaleIndex;
+			++result.m_cs;
 	}
 
-	int top = (int)ltop;
+	result.m_top = (int)ltop;
+
+	int derivedFrequency = kClockFrequency / (kPrescaleFrequency[result.m_cs] * result.m_top);
+	s_println("calculate_prescale_and_top: frequency: %d, clock=%ld/(prescale[%d]=%d * top=%d): %d",
+				frequency, kClockFrequency, result.m_cs, kPrescaleFrequency[result.m_cs], result.m_top, derivedFrequency);
+
+	return result;
+}
+
+void setup_CTC_timer(int whichTimer, int frequency, Callback func, void* arg)
+{
+	KASSERT(whichTimer == 0);
+
+	uint16_t maxTop = 0xff; // timer0 uses 8-bit registers
+	TimerSetup ts = calculate_prescale_and_top(frequency, maxTop);
+
+	s_println("setup_CTC_timer: cs=%d, top=%d", ts.m_cs, ts.m_top);
 
 	int com0a = 0;
 	int com0b = 0;
 	int wgm = 2; // CTC mode
 	int foc0a = 0;
 	int foc0b = 0;
-	int cs = prescaleIndex;
-	set_TCCRn(whichTimer, com0a, com0b, wgm, foc0a, foc0b, cs);
+	set_TCCRn(whichTimer, com0a, com0b, wgm, foc0a, foc0b, ts.m_cs);
 
-	set_OCRnA(whichTimer, top);
+	set_OCRnA(whichTimer, ts.m_top);
 
 	int ocieNa = 1;
 	int ocieNb = 0;
@@ -170,50 +198,54 @@ CallbackInfo setup_CTC_timer(int whichTimer, int frequency, Callback func, void*
 
 	CallbackInfo* info = &callbackInfo[whichTimer];
 
-	CallbackInfo result = *info;
-
 	info->m_func = func;
 	info->m_arg = arg;
-
-	return result;
 }
 
-void initTimers()
+void setup_CTC_timer3(int frequency, Callback func, void* arg)
 {
-	// Put timer 0 in CTC mode
-	//
-	int wgm = 2; // CTC mode
-	int mask = (1 << WGM01) | (1 << WGM00);
-	TCCR0A = (TCCR0A & ~mask) | (wgm & mask);
-	mask = (1 << WGM02);
-	TCCR0B = (TCCR0B & ~mask) | (wgm & mask);
+	int com0a = 0; // 0 for "normal" mode
+	int com0b = 0; // 0 for "normal" mode
+	int wgm = 4; // OCR3 for TOP
+	int icnc = 0; // input capture noise canceller
+	int ices = 0; // image capture edge select
+	unsigned maxTop = 0xffff; // timer3 uses 16-bit registers
 
-	// To get a frequency of 1000 Hz (1 ms), we take
-	// the frequency of the 20MHz, divided by the
-	// prescaler, divided by the TOP of OCRA.
-	// Dividing the 20MHz by the prescaler, which
-	// has choices of none, 1, 8, 64, 256, 1024.
-	// We set this to 256, which brings us to
-	// 20*1000*1000 / 256 = 78125
-	//
-	int clockSelect = 4; // setting for 256
-	mask = 7;
-	TCCR0B = (TCCR0B & ~mask) | clockSelect;
+	TimerSetup ts = calculate_prescale_and_top(frequency, maxTop);
 
-	// To get down to 1000Hz, we take
-	// 78125/1000 = 78
-	// so we need to set OCRA to 82
-	OCR0A = 78;
+	s_println("setup_CTC_timer3 cs=%d, top=%d", ts.m_cs, ts.m_top);
 
-	// Now enable the compare interrupt
-	//
-	mask = 1 << OCIE0A;
-	TIMSK0 = (TIMSK0 & ~mask) | mask;
+	int a = ((com0a & 3) << 6) | ((com0b & 3) << 4) | (wgm & 3);
+	int b = ((icnc & 1) << 7) | ((ices & 1) << 6) | (((wgm >> 2) & 3) << 3) | (ts.m_cs & 7);
+	s_println("TCCR3A=0x%02x, TCCR3B=0x%02x", a, b);
+	TCCR3A = a;
+	TCCR3B = b;
+
+	s_println("OCR3A=0x%02x", ts.m_top);
+	OCR3A = ts.m_top;
+
+	int icie3 = 0;
+	int ocie3b = 0;
+	int ocie3a = 1; // enable Timer/Counter3 Output Compare A Match interrupt
+	int toie3 = 0;
+	a = ((icie3 & 1) << 5) | ((ocie3b & 1) << 2) | ((ocie3a & 1) << 1) | (toie3 & 1);
+	s_println("TIMSK3=0x%02x", a);
+	TIMSK3 = a;
+
+	CallbackInfo* info = &callbackInfo[3];
+	info->m_func = func;
 }
 
 ISR(TIMER0_COMPA_vect)
 {
 	Callback func = callbackInfo[0].m_func;
 	void* arg = callbackInfo[0].m_arg;
+	func(arg);
+}
+
+ISR(TIMER3_COMPA_vect)
+{
+	Callback func = callbackInfo[3].m_func;
+	void* arg = callbackInfo[3].m_arg;
 	func(arg);
 }
