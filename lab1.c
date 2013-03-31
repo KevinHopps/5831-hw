@@ -68,7 +68,12 @@ void redTask()
 		setIOValue(iop, 0);
 	}
 
-	setIOValue(iop, ++counter[kRED] & 1);
+	int value = 0;
+
+	if (period[kRED] > 0)
+		value = (int)(++counter[kRED] & 1);
+
+	setIOValue(iop, value);
 }
 
 volatile uint32_t redInterruptCount;
@@ -95,7 +100,32 @@ static void yellowCallback(void* arg)
 		setIOValue(iop, 0);
 	}
 
-	setIOValue(iop, ++counter[kYELLOW] & 1);
+	int value = 0;
+
+	if (period[kYELLOW] > 0)
+		value = (int)(++counter[kYELLOW] & 1);
+
+	setIOValue(iop, value);
+}
+
+static void greenCallback(void* arg)
+{
+	static KIORegs* iop = 0;
+	if (iop == 0)
+	{
+		static KIORegs ios;
+		ios = getIORegs(GREEN_PIN);
+		iop = &ios;
+		setDataDir(iop, OUTPUT);
+		setIOValue(iop, 0);
+	}
+
+	int value = 0;
+
+	if (period[kGREEN] > 0)
+		value = (int)(++counter[kGREEN] & 1);
+
+	setIOValue(iop, value);
 }
 
 extern int toggle_cmd(int argc, char** argv);
@@ -114,7 +144,7 @@ void setRedPeriod(int msecPerToggle)
 	redInterruptCount = 0;
 }
 
-extern volatile uint32_t timer1_count;
+void setPeriod(int color, int msecPeriod);
 
 int main()
 {
@@ -123,20 +153,11 @@ int main()
 	//s_println("Busy blink yellow LED at %d Hz for %d seconds", blinkHz, nsec);
 	//busy_blink(5, 1, GREEN_PIN);
 
-	period[kRED] = 1000;
-	period[kYELLOW] = 500;
-	period[kGREEN] = 250;
+	setup_CTC_timer0(1, redCallback, 0);
 
-	s_println("Setup CTC timer");
-
-	setup_CTC_timer0(kTimer0Frequency, redCallback, 0);
-
-	setRedPeriod(500);
-
-	int yellowHz = 1000 / period[kYELLOW];
-	setup_CTC_timer3(yellowHz, yellowCallback, (void*)0);
-
-	setup_PWM_timer1(period[kGREEN]);
+	setPeriod(kRED, 1000);
+	setPeriod(kYELLOW, 500);
+	setPeriod(kGREEN, 250);
 
 	sei(); // enable interrupts
 
@@ -235,7 +256,7 @@ int toggle_cmd(int argc, char** argv)
 		const char* time_str = *argv++;
 		int time = atoi(time_str);
 
-		if (time < 0 || time >= 1000)
+		if (time < 0 || time > 1000)
 			s_println("time must be in (0,1000]");
 		else
 		{
@@ -251,6 +272,10 @@ void setPeriod(int color, int msecPerToggle)
 {
 	int freq;
 
+	s_println("setPeriod(%d, %d)", color, msecPerToggle);
+
+	period[color] = msecPerToggle;
+
 	switch (color)
 	{
 		case kRED:
@@ -260,8 +285,11 @@ void setPeriod(int color, int msecPerToggle)
 			break;
 
 		case kYELLOW:
-			freq = 1000 / msecPerToggle;
-			setup_CTC_timer3(freq, yellowCallback, 0);
+			setup_CTC_timer3(msecPerToggle, yellowCallback, 0);
+			break;
+
+		case kGREEN:
+			setup_PWM_timer1(msecPerToggle, greenCallback, 0);
 			break;
 	}
 }
