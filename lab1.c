@@ -59,7 +59,6 @@ int period[kNCOLORS];
 void redTask()
 {
 	static KIORegs* iop = 0;
-	static int count = 0;
 	if (iop == 0)
 	{
 		static KIORegs ios;
@@ -69,11 +68,8 @@ void redTask()
 		setIOValue(iop, 0);
 	}
 
-	setIOValue(iop, ++count & 1);
+	setIOValue(iop, ++counter[kRED] & 1);
 }
-
-static uint32_t counters[3];
-static int frequency[3];
 
 volatile uint32_t redInterruptCount;
 uint32_t redInterruptsPerRelease;
@@ -90,7 +86,6 @@ static void redCallback(void* arg)
 static void yellowCallback(void* arg)
 {
 	static KIORegs* iop = 0;
-	static int count = 0;
 	if (iop == 0)
 	{
 		static KIORegs ios;
@@ -100,14 +95,14 @@ static void yellowCallback(void* arg)
 		setIOValue(iop, 0);
 	}
 
-	setIOValue(iop, ++count & 1);
+	setIOValue(iop, ++counter[kYELLOW] & 1);
 }
 
 extern int toggle_cmd(int argc, char** argv);
 extern int zero_cmd(int argc, char** argv);
 extern int print_cmd(int argc, char** argv);
 
-const char* const colorNames[] = { "red", "green", "yellow", "all" };
+const char* const colorNames[] = { "red", "yellow", "green", "all" };
 int colorNameCount = sizeof(colorNames) / sizeof(*colorNames);
 
 #define kTimer0Frequency 1000
@@ -121,14 +116,14 @@ void setRedPeriod(int msecPerToggle)
 
 int main()
 {
-	int blinkHz = 1;
+	//int blinkHz = 1;
 	//int nsec = 5;
 	//s_println("Busy blink yellow LED at %d Hz for %d seconds", blinkHz, nsec);
 	//busy_blink(nsec, blinkHz, YELLOW_PIN);
 
-	frequency[kRED] = 1;
-	frequency[kYELLOW] = 10;
-	frequency[kGREEN] = 1;
+	period[kRED] = 1000;
+	period[kYELLOW] = 100;
+	period[kGREEN] = 1000;
 
 	s_println("Setup CTC timer");
 
@@ -136,7 +131,7 @@ int main()
 
 	setRedPeriod(500);
 
-	int yellowHz = 10;
+	int yellowHz = 1000 / period[kYELLOW];
 	setup_CTC_timer3(yellowHz, yellowCallback, (void*)0);
 
 	sei(); // enable interrupts
@@ -162,18 +157,62 @@ int main()
 	}
 }
 
-const char* getColorName(const char* str)
+int getColorIndex(const char* str)
 {
-	const char* result = 0;
+	int result = -1;
+
 	int i;
-	for (i = 0; result == 0 && i < colorNameCount; ++i)
+	for (i = 0; result < 0 && i < colorNameCount; ++i)
 	{
 		const char* name = colorNames[i];
 		if (matchIgnoreCase(str, name, strlen(str)))
-			result = name;
+			result = i;
 	}
+
 	return result;
 }
+
+const char* getColorName(const char* str)
+{
+	const char* result = 0;
+
+	int i = getColorIndex(str);
+	if (i >= 0)
+		result = colorNames[i];
+
+	return result;
+}
+
+typedef void (*ColorFunc)(int color, void* arg);
+
+void do_for_color(const char* color, ColorFunc func, void* arg)
+{
+	int iBegin = -1;
+	int iEnd = -1;
+	int i = getColorIndex(color);
+	if (0 <= i && i < kNCOLORS)
+	{
+		iBegin = i;
+		iEnd = iBegin + 1;
+	}
+	else if (i == kNCOLORS)
+	{
+		iBegin = 0;
+		iEnd = kNCOLORS;
+	}
+
+	if (iBegin >= iEnd)
+		s_println("%s: unknown color", color);
+	else
+	{
+		for (i = iBegin; i < iEnd; ++i)
+			func(i, arg);
+	}
+}
+
+void toggleFunc(int color, void* arg);
+void zeroFunc(int color, void* arg);
+void printFunc(int color, void* arg);
 
 int toggle_cmd(int argc, char** argv)
 {
@@ -190,29 +229,43 @@ int toggle_cmd(int argc, char** argv)
 	{
 		const char* color_str = *argv++;
 		const char* time_str = *argv++;
-
-		const char* colorName = getColorName(color_str);;
 		int time = atoi(time_str);
 
-		if (colorName == 0)
-			s_println("%s: unknown color", color_str);
+		if (time < 0 || time >= 1000)
+			s_println("time must be in (0,1000]");
 		else
 		{
-			s_println("toggle %s every %d ms", colorName, time);
-			if (strcmp(colorName, "red") == 0)
-			{
-				setRedPeriod(time);
-				/*
-				redInterruptsPerRelease = (kTimer0Frequency * (long)time) / 1000;
-				redInterruptCount = 0;
-				redNextRelease = 0;
-				*/
-			}
+			do_for_color(color_str, toggleFunc, &time);
 			result = 0;
 		}
 	}
 
 	return result;
+}
+
+void setPeriod(int color, int msecPerToggle)
+{
+	int freq;
+
+	switch (color)
+	{
+		case kRED:
+			redInterruptsPerRelease = (kTimer0Frequency * msecPerToggle) / 1000;
+			redInterruptCount = 0;
+			redNextRelease = 0;
+			break;
+
+		case kYELLOW:
+			freq = 1000 / msecPerToggle;
+			setup_CTC_timer3(freq, yellowCallback, 0);
+			break;
+	}
+}
+
+void toggleFunc(int color, void* arg)
+{
+	int msecPerToggle = *(int*)arg;
+	setPeriod(color, msecPerToggle);
 }
 
 int zero_cmd(int argc, char** argv)
@@ -229,17 +282,17 @@ int zero_cmd(int argc, char** argv)
 	else
 	{
 		const char* color_str = *argv++;
-		const char* colorName = getColorName(color_str);
-		if (colorName == 0)
-			s_println("%s: unknown color", color_str);
-		else
-		{
-			s_println("zero counter for %s", colorName);
-			result = 0;
-		}
+		do_for_color(color_str, zeroFunc, 0);
+		result = 0;
 	}
 
 	return result;
+}
+
+void zeroFunc(int color, void* arg)
+{
+	counter[color] = 0;
+	printFunc(color, arg);
 }
 
 int print_cmd(int argc, char** argv)
@@ -256,15 +309,14 @@ int print_cmd(int argc, char** argv)
 	else
 	{
 		const char* color_str = *argv++;
-		const char* colorName = getColorName(color_str);
-		if (colorName == 0)
-			s_println("%s: unknown color", color_str);
-		else
-		{
-			s_println("print counter for %s", colorName);
-			result = 0;
-		}
+		do_for_color(color_str, printFunc, 0);
+		result = 0;
 	}
 
 	return result;
+}
+
+void printFunc(int color, void* arg)
+{
+	s_println("%s count=%ld", colorNames[color], (long)counter[color]);
 }
