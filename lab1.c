@@ -75,13 +75,16 @@ void redTask()
 static uint32_t counters[3];
 static int frequency[3];
 
+volatile uint32_t redInterruptCount;
+uint32_t redInterruptsPerRelease;
+uint32_t redNextRelease;
+
 // This function is called by the timer interrupt routine
 // that is setup by setup_CTC_timer, called by main().
 //
 static void redCallback(void* arg)
 {
-	uint32_t* n = (uint32_t*)arg;
-	++(*n);
+	++redInterruptCount;
 }
 
 static void yellowCallback(void* arg)
@@ -107,6 +110,15 @@ extern int print_cmd(int argc, char** argv);
 const char* const colorNames[] = { "red", "green", "yellow", "all" };
 int colorNameCount = sizeof(colorNames) / sizeof(*colorNames);
 
+#define kTimer0Frequency 1000
+
+void setRedPeriod(int msecPerToggle)
+{
+	redInterruptsPerRelease = (kTimer0Frequency * msecPerToggle) / 1000;
+	redNextRelease = 0;
+	redInterruptCount = 0;
+}
+
 int main()
 {
 	int blinkHz = 1;
@@ -120,13 +132,9 @@ int main()
 
 	s_println("Setup CTC timer");
 
-	int redTimer = 0;
-	int redHz = 1000;
-	volatile uint32_t redCount = 0;
-	setup_CTC_timer0(redHz, redCallback, (void*)&redCount);
+	setup_CTC_timer0(kTimer0Frequency, redCallback, 0);
 
-	int redReleaseInterval = redHz / (2 * blinkHz);
-	uint32_t redNextRelease = 0;
+	setRedPeriod(500);
 
 	int yellowHz = 10;
 	setup_CTC_timer3(yellowHz, yellowCallback, (void*)0);
@@ -146,10 +154,10 @@ int main()
 		if (CIOCheckForCommand(&cio))
 			CIORunCommand(&cio);
 
-		if (redCount >= redNextRelease)
+		if (redInterruptCount >= redNextRelease)
 		{
 			redTask();
-			redNextRelease += redReleaseInterval;
+			redNextRelease += redInterruptsPerRelease;
 		}
 	}
 }
@@ -191,6 +199,15 @@ int toggle_cmd(int argc, char** argv)
 		else
 		{
 			s_println("toggle %s every %d ms", colorName, time);
+			if (strcmp(colorName, "red") == 0)
+			{
+				setRedPeriod(time);
+				/*
+				redInterruptsPerRelease = (kTimer0Frequency * (long)time) / 1000;
+				redInterruptCount = 0;
+				redNextRelease = 0;
+				*/
+			}
 			result = 0;
 		}
 	}
