@@ -114,16 +114,18 @@ void setRedPeriod(int msecPerToggle)
 	redInterruptCount = 0;
 }
 
+extern volatile uint32_t timer1_count;
+
 int main()
 {
 	//int blinkHz = 1;
 	//int nsec = 5;
 	//s_println("Busy blink yellow LED at %d Hz for %d seconds", blinkHz, nsec);
-	//busy_blink(nsec, blinkHz, YELLOW_PIN);
+	//busy_blink(5, 1, GREEN_PIN);
 
 	period[kRED] = 1000;
-	period[kYELLOW] = 100;
-	period[kGREEN] = 1000;
+	period[kYELLOW] = 500;
+	period[kGREEN] = 250;
 
 	s_println("Setup CTC timer");
 
@@ -133,6 +135,8 @@ int main()
 
 	int yellowHz = 1000 / period[kYELLOW];
 	setup_CTC_timer3(yellowHz, yellowCallback, (void*)0);
+
+	setup_PWM_timer1(period[kGREEN]);
 
 	sei(); // enable interrupts
 

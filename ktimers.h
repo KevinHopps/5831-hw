@@ -12,6 +12,7 @@ typedef void (*Callback)(void* arg);
 // They require different setting up.
 //
 void setup_CTC_timer0(int frequency, Callback func, void* arg);
+void setup_PWM_timer1(int frequency);
 void setup_CTC_timer3(int frequency, Callback func, void* arg);
 
 #endif // #ifndef _ktimers_h_
