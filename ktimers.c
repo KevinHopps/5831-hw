@@ -100,7 +100,7 @@ void setup_PWM_timer1(int msecPeriod, Callback func, void* arg)
 
 	if (msecPeriod > 0)
 	{
-		ts = calcTimerSetup(msecPeriod*2, maxTop);
+		ts = calcTimerSetup(msecPeriod, maxTop);
 		s_println("setup_PWM_timer1 cs=%d, top=%u", ts.m_cs, ts.m_top);
 	}
 

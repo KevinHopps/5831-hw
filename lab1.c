@@ -58,6 +58,7 @@ int period[kNCOLORS];
 
 void redTask()
 {
+	static int state;
 	static KIORegs* iop = 0;
 	if (iop == 0)
 	{
@@ -71,7 +72,11 @@ void redTask()
 	int value = 0;
 
 	if (period[kRED] > 0)
-		value = (int)(++counter[kRED] & 1);
+	{
+		value = ++state & 1;
+		if (value == 0)
+			++counter[kRED];
+	}
 
 	setIOValue(iop, value);
 }
@@ -90,6 +95,7 @@ static void redCallback(void* arg)
 
 static void yellowCallback(void* arg)
 {
+	static int state;
 	static KIORegs* iop = 0;
 	if (iop == 0)
 	{
@@ -103,7 +109,11 @@ static void yellowCallback(void* arg)
 	int value = 0;
 
 	if (period[kYELLOW] > 0)
-		value = (int)(++counter[kYELLOW] & 1);
+	{
+		value = ++state & 1;
+		if (value == 0)
+			++counter[kYELLOW];
+	}
 
 	setIOValue(iop, value);
 }
@@ -128,23 +138,17 @@ static void greenCallback(void* arg)
 	setIOValue(iop, value);
 }
 
-extern int toggle_cmd(int argc, char** argv);
-extern int zero_cmd(int argc, char** argv);
-extern int print_cmd(int argc, char** argv);
+int toggle_cmd(int argc, char** argv);
+int zero_cmd(int argc, char** argv);
+int print_cmd(int argc, char** argv);
+int stop_cmd(int argc, char** argv);
 
 const char* const colorNames[] = { "red", "yellow", "green", "all" };
 int colorNameCount = sizeof(colorNames) / sizeof(*colorNames);
 
 #define kTimer0Frequency 1000
 
-void setRedPeriod(int msecPerToggle)
-{
-	redInterruptsPerRelease = (kTimer0Frequency * msecPerToggle) / 1000;
-	redNextRelease = 0;
-	redInterruptCount = 0;
-}
-
-void setPeriod(int color, int msecPeriod);
+void setPeriod(int color, int msecPerCycle);
 
 int main()
 {
@@ -156,8 +160,8 @@ int main()
 	setup_CTC_timer0(1, redCallback, 0);
 
 	setPeriod(kRED, 1000);
-	setPeriod(kYELLOW, 500);
-	setPeriod(kGREEN, 250);
+	setPeriod(kYELLOW, 1000);
+	setPeriod(kGREEN, 1000);
 
 	sei(); // enable interrupts
 
@@ -167,8 +171,9 @@ int main()
 	CIORegisterCommand(&cio, "zero", zero_cmd);
 	CIORegisterCommand(&cio, "toggle", toggle_cmd);
 	CIORegisterCommand(&cio, "print", print_cmd);
+	CIORegisterCommand(&cio, "stop", stop_cmd);
 
-	s_println("Entring while(1)");
+	s_println("Entring while (1)");
 	while (1)
 	{
 		if (CIOCheckForCommand(&cio))
@@ -256,8 +261,8 @@ int toggle_cmd(int argc, char** argv)
 		const char* time_str = *argv++;
 		int time = atoi(time_str);
 
-		if (time < 0 || time > 1000)
-			s_println("time must be in (0,1000]");
+		if (time < 0)
+			s_println("time must be non-negative");
 		else
 		{
 			do_for_color(color_str, toggleFunc, &time);
@@ -268,36 +273,36 @@ int toggle_cmd(int argc, char** argv)
 	return result;
 }
 
-void setPeriod(int color, int msecPerToggle)
+void setPeriod(int color, int msecPerCycle)
 {
 	int freq;
 
-	s_println("setPeriod(%d, %d)", color, msecPerToggle);
+	s_println("setPeriod(%d, %d)", color, msecPerCycle);
 
-	period[color] = msecPerToggle;
+	period[color] = msecPerCycle;
 
 	switch (color)
 	{
 		case kRED:
-			redInterruptsPerRelease = (kTimer0Frequency * msecPerToggle) / 1000;
+			redInterruptsPerRelease = (kTimer0Frequency * msecPerCycle) / 2000;
 			redInterruptCount = 0;
 			redNextRelease = 0;
 			break;
 
 		case kYELLOW:
-			setup_CTC_timer3(msecPerToggle, yellowCallback, 0);
+			setup_CTC_timer3(msecPerCycle/2, yellowCallback, 0);
 			break;
 
 		case kGREEN:
-			setup_PWM_timer1(msecPerToggle, greenCallback, 0);
+			setup_PWM_timer1(msecPerCycle, greenCallback, 0);
 			break;
 	}
 }
 
 void toggleFunc(int color, void* arg)
 {
-	int msecPerToggle = *(int*)arg;
-	setPeriod(color, msecPerToggle);
+	int msecPerCycle = *(int*)arg;
+	setPeriod(color, msecPerCycle);
 }
 
 int zero_cmd(int argc, char** argv)
@@ -351,4 +356,11 @@ int print_cmd(int argc, char** argv)
 void printFunc(int color, void* arg)
 {
 	s_println("%s count=%ld", colorNames[color], (long)counter[color]);
+}
+
+int stop_cmd(int argc, char** argv)
+{
+	s_println("stop");
+	while(1)
+		continue;
 }
