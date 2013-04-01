@@ -173,6 +173,8 @@ ISR(TIMER0_COMPA_vect)
 
 ISR(TIMER1_COMPA_vect)
 {
+	//sei();
+	//kdelay_ms(510);
 	Callback func = callbackInfo[1].m_func;
 	void* arg = callbackInfo[1].m_arg;
 	func(arg);

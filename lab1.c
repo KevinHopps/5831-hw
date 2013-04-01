@@ -159,9 +159,9 @@ int main()
 
 	setup_CTC_timer0(1, redCallback, 0);
 
-	setPeriod(kRED, 1000);
-	setPeriod(kYELLOW, 1000);
-	setPeriod(kGREEN, 1000);
+	setPeriod(kRED, 500);
+	setPeriod(kYELLOW, 500);
+	setPeriod(kGREEN, 500);
 
 	sei(); // enable interrupts
 
