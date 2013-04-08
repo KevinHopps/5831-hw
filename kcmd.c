@@ -2,6 +2,7 @@
 #include "kcmd.h"
 #include "kdebug.h"
 #include "kserial.h"
+#include "kutils.h"
 
 void CIOCommandReset(CommandIO* ciop)
 {
@@ -35,25 +36,23 @@ int CIOIndex(CommandIO* ciop, const char* name)
 	return i;
 }
 
-int CIOLookup(CommandIO* ciop, const char* name)
+bool CIOLookup(CommandIO* ciop, const char* name)
 {
-	int result = 0;
+	bool result = false;
 
 	int i = CIOIndex(ciop, name);
 	if (i >= 0)
 	{
 		ciop->m_found = &ciop->m_cmd[i];
-		result = 1;
+		result = true;
 	}
 
 	return result;
 }
 
-int CIOCheckForCommand(CommandIO* ciop)
+bool CIOCheckForCommand(CommandIO* ciop)
 {
-	static long numCalls;
-
-	int result = 0;
+	bool result = false;
 
 	if (!ciop->m_prompted)
 	{

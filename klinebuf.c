@@ -19,7 +19,7 @@ int LBCharAt(const LineBuf* lbuf, int index)
 	return lbuf->m_buf[index] & 0xff;
 }
 
-const char* LBFreeze(LineBuf* lbuf)
+char* LBFreeze(LineBuf* lbuf)
 {
 	lbuf->m_frozen = 1;
 	lbuf->m_buf[lbuf->m_len] = 0;

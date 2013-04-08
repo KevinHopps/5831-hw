@@ -1,7 +1,7 @@
 #include "kserial.h"
 #include "kutils.h"
 
-static int iswhite(char c)
+static bool iswhite(char c)
 {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
@@ -27,9 +27,9 @@ int make_argv(char** argv, char* str)
 	return argc;
 }
 
-int matchIgnoreCase(const char* s1, const char* s2, int maxLen)
+bool matchIgnoreCase(const char* s1, const char* s2, int maxLen)
 {
-	int match = 1;
+	bool match = true;
 
 	while (match && maxLen != 0)
 	{
@@ -52,7 +52,7 @@ int matchIgnoreCase(const char* s1, const char* s2, int maxLen)
 				c2 += 'a' - 'A';
 
 			if (c1 != c2)
-				match = 0;
+				match = false;
 		}
 	}
 

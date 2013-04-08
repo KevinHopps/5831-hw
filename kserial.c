@@ -112,3 +112,35 @@ int s_read(char* buf, int want, int msecTimeout)
 
 	return got;
 }
+
+char* s_ftosb(char* buf, double f)
+{
+	char* bp = buf;;
+
+	if (f < 0.0)
+	{
+		*bp++ = '-';
+		f = -f;
+	}
+	
+	int n = (int)f;
+	bp += sprintf(bp, "%d", n);
+
+	f -= n;
+	n = (int)(f * 1000.0 + 0.5);
+	bp += sprintf(bp, ".%03d", n);
+
+	return buf;
+}
+
+char* s_ftos(double f)
+{
+	static char buf[32];
+	return s_ftosb(buf, f);
+}
+
+int s_printflt(double f)
+{
+	char buf[32];
+	return s_printf("%s", s_ftosb(buf, f));
+}

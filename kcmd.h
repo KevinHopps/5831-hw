@@ -1,7 +1,7 @@
 #ifndef _kcmd_h_
 #define _kcmd_h_
 
-#include <inttypes.h> //gives us uintX_t
+#include "ktypes.h"
 #include "klinebuf.h"
 
 #define MAX_ARGC 8
@@ -10,12 +10,12 @@
 
 typedef int (*CmdFunc)(int argc, char** argv);
 
+typedef struct Command_ Command;
 struct Command_
 {
 	char m_name[MAX_NAMELEN+1];
 	CmdFunc m_func;
 };
-typedef struct Command_ Command;
 
 struct CommandIO_
 {
@@ -29,17 +29,17 @@ struct CommandIO_
 };
 typedef struct CommandIO_ CommandIO;
 
-extern void CIOReset(CommandIO* cmdp);
-extern void CIORegisterCommand(CommandIO* cmdp, const char* name, CmdFunc func);
+void CIOReset(CommandIO* cmdp);
+void CIORegisterCommand(CommandIO* cmdp, const char* name, CmdFunc func);
 
 // This will scan for serial input and return nonzero when
 // a command is ready to run.
 //
-extern int CIOCheckForCommand(CommandIO* cmdp);
+bool CIOCheckForCommand(CommandIO* cmdp);
 
 // This will run the command found by CIOCheckForCommand
 // and return its result.
 //
-extern int CIORunCommand(CommandIO* cmdp);
+int CIORunCommand(CommandIO* cmdp);
 
 #endif // #ifndef _kcmd_h_

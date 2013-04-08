@@ -14,7 +14,7 @@
 #define kALL 3
 #define kNCOLORS 3
 
-#define RED_PIN IO_C1
+#define RED_PIN IO_A3
 #define YELLOW_PIN IO_A0
 #define GREEN_PIN IO_D5
 

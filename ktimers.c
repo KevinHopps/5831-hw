@@ -2,7 +2,29 @@
 #include "kio.h"
 #include "kserial.h"
 #include "ktimers.h"
+#include "ktypes.h"
 #include "kdebug.h"
+
+#define WGM1_NORMAL 0 // TOP=0xffff OCRnx=immediate TOVn=MAX
+#define WGM1_PWM_PHASE_CORRECT_8_BIT 1 // TOP=0x00ff, OCRnx=TOP, TOVn=BOTTOM
+#define WGM1_PWM_PHASE_CORRECT_9_BIT 2 // TOP=0x01ff, OCRnx=TOP, TOVn=BOTTOM
+#define WGM1_PWM_PHASE_CORRECT_10_BIT 3 // TOP=0x03ff, OCRnx=TOP, TOVn=BOTTOM
+#define WGM1_CTC_TOP_OCRnA 4 // TOP=OCRnA, OCRnx=immediate, TOVn=MAX
+#define WGM1_FAST_PWM_8_BIT 5 // TOP=0x00ff, OCRnx=BOTTOM, TOVn=TOP
+#define WGM1_FAST_PWM_9_BIT 6 // TOP=0x01ff, OCRnx=BOTTOM, TOVn=TOP
+#define WGM1_FAST_PWM_10_BIT 7 // TOP=0x03ff, OCRnx=BOTTOM, TOVn=TOP
+#define WGM1_PWM_PHASE_AND_FREQ_CORRECT_TOP_ICRn 8 // TOP=ICRn, OCRnx=BOTTOM, TOVn=BOTTOM
+#define WGM1_PWM_PHASE_AND_FREQ_CORRECT_TOP_OCRnA 9 // TOP=OCRnA, OCRnx=BOTTOM, TOVn=BOTTOM
+#define WGM1_PWM_PHASE_CORRECT_TOP_ICRn 10 // TOP=ICRn, OCRnx=TOP, TOVn=BOTTOM
+#define WGM1_PWM_PHASE_CORRECT_TOP_OCRnA 11 // TOP=OCRnA, OCRnx=TOP, TOVn=BOTTOM
+#define WGM1_CTC_TOP_ICRn 12 // TOP=ICRn, OCRnx=immediate, TOVn=MAX
+#define WGM1_RESERVED 13
+#define WGM1_FAST_PWM_TOP_ICRn 14 // TOP=ICRn, OCRnx=BOTTOM, TOVn=TOP
+#define WGM1_FAST_PWM_TOP_OCRnA 15 // TOP=OCRnA, OCRnx=BOTTOM, TOVn=TOP
+
+#define WGM2_NORMAL 0
+#define WGM2_PWM_PHASE_CORRECT_TOP_FF 1 // TOP=0xff
+#define WGM2_PWM_PHASE_CORRECT_TOP_OCRA 5 // TOP=OCRA
 
 typedef struct CallbackInfo_
 {
@@ -10,13 +32,15 @@ typedef struct CallbackInfo_
 	void* m_arg;
 } CallbackInfo;
 
+CallbackInfo timer0CallbackInfo;
+CallbackInfo timer3CallbackInfo;
+CallbackInfo timer2MatchCallbackInfo;
+CallbackInfo timer2PeriodCallbackInfo;
+
 static const int kMinPrescaleIndex = 1;
 static const int kPrescaleFrequency[] = { 0, 1, 8, 64, 256, 1024 };
 static const int kMaxPrescaleIndex = sizeof(kPrescaleFrequency) / sizeof(*kPrescaleFrequency) - 1;
 static const uint32_t kClockFrequency = 20L * 1000L * 1000L;
-
-#define kNumTimers 4
-static CallbackInfo callbackInfo[kNumTimers];
 
 struct TimerSetup_
 {
@@ -52,7 +76,7 @@ static TimerSetup calcTimerSetup(int msecPeriod, uint16_t maxTop)
 	return result;
 }
 
-void setup_CTC_timer0(int msecPeriod, Callback func, void* arg)
+void setup_CTC_timer0(uint16_t msecPeriod, Callback func, void* arg)
 {
 	TimerSetup ts = { 0, 0 };
 
@@ -82,54 +106,62 @@ void setup_CTC_timer0(int msecPeriod, Callback func, void* arg)
 	int toieN = 0;
 	TIMSK0 = ((ocieNa & 1) << OCIE0A) | ((ocieNb & 1) << OCIE0B) | ((toieN& 1) << TOIE0);
 
-	CallbackInfo* info = &callbackInfo[0];
-
-	info->m_func = func;
-	info->m_arg = arg;
+	timer0CallbackInfo.m_func = func;
+	timer0CallbackInfo.m_arg = arg;
 }
 
-void setup_PWM_timer1(int msecPeriod, Callback func, void* arg)
+void set_bits(uint8_t* lvalue, int highest, int lowest, int value)
 {
-	TimerSetup ts = {0, 0};
-	int com1a = 2; // Clear OCnA/OCnB on Compare Match, set OCnA/OCnB at BOTTOM
-	int com1b = 0; // Normal port operation, OCnA/OCnB disconnected.
-	int wgm = 14; // fast PWM, TOP is in ICR1
-	int icnc = 0; // input capture noise canceller
-	int ices = 0; // image capture edge select
-	unsigned maxTop = 0xffff;
-
-	if (msecPeriod > 0)
-	{
-		ts = calcTimerSetup(msecPeriod, maxTop);
-		s_println("setup_PWM_timer1 cs=%d, top=%u", ts.m_cs, ts.m_top);
-	}
-
-	int a = ((com1a & 3) << 6) | ((com1b & 3) << 4) | (wgm & 3);
-	int b = ((icnc & 1) << 7) | ((ices & 1) << 6) | (((wgm >> 2) & 3) << 3) | (ts.m_cs & 7);
-	TCCR1A = a;
-	TCCR1B = b;
-	TCCR1C = 0;
-
-	KIORegs regs = getIORegs(IO_D5);
-	setDataDir(&regs, OUTPUT);
-
-	ICR1 = ts.m_top;
-	OCR1A = ts.m_top / 2;
-
-	int icie1 = 0;
-	int ocie1b = 0;
-	int ocie1a = (msecPeriod > 0); // enable Timer/Counter1 Output Compare A Match interrupt
-	int toie1 = 0;
-	a = ((icie1 & 1) << 5) | ((ocie1b & 1) << 2) | ((ocie1a & 1) << 1) | (toie1 & 1);
-
-	TIMSK1 = a;
-
-	CallbackInfo* info = &callbackInfo[1];
-	info->m_func = func;
-	info->m_arg = arg;
+	int nbits = highest - lowest + 1;
+	int mask = ~(~0 << nbits);
+	value &= mask;
+	mask <<= lowest;
+	value <<= lowest;
+	*lvalue = (*lvalue & ~mask) | value;
 }
 
-void setup_CTC_timer3(int msecPeriod, Callback func, void* arg)
+void setup_PWM_timer2(float dutyCycle)
+{
+	int useA = 0;
+	int useB = 1;
+	int wgm = WGM2_PWM_PHASE_CORRECT_TOP_FF;
+	uint8_t tccr2a = 0;
+	uint8_t tccr2b = 0;
+	
+	tccr2a = 0;
+	s_println("wgm=%d, tccr2a=0x%02x", wgm, tccr2a);
+	set_bits(&tccr2a, 7, 6, 2*useA);
+	s_println("2*useA=%d, tccr2a=0x%02x", 2*useA, tccr2a);
+	set_bits(&tccr2a, 5, 4, 2*useB);
+	s_println("2*useB=%d, tccr2a=0x%02x", 2*useB, tccr2a);
+	set_bits(&tccr2a, 1, 0, wgm);
+	s_println("tccr2a=0x%02x", tccr2a);
+
+	tccr2b = 0;
+	wgm >>= 2;
+	set_bits(&tccr2b, 3, 3, wgm);
+	s_println("wgm>>2 is %d, tccr2b=0x%02x", wgm, tccr2b);
+	int cs = 5;
+	set_bits(&tccr2b, 2, 0, cs);
+	s_println("cs=%d, tccr2b=0x%02x", cs, tccr2b);
+	
+	TCCR2A = tccr2a;
+	TCCR2B = tccr2b;
+	
+	uint8_t matchCount = (uint8_t)(255 * dutyCycle + 0.5);
+	OCR2A = 0;
+	OCR2B = 0;
+	if (useA)
+		OCR2A = matchCount;
+	else if (useB)
+		OCR2B = matchCount;
+
+	TIMSK2 = 0;
+	
+	s_println("TCCR2A=0x%02x, TCCR2B=0x%02x, matchCount=%d", tccr2a, tccr2b, matchCount);
+}
+
+void setup_CTC_timer3(uint16_t msecPeriod, Callback func, void* arg)
 {
 	TimerSetup ts = {0, 0};
 	int com0a = 0; // 0 for "normal" mode
@@ -159,30 +191,39 @@ void setup_CTC_timer3(int msecPeriod, Callback func, void* arg)
 	a = ((icie3 & 1) << 5) | ((ocie3b & 1) << 2) | ((ocie3a & 1) << 1) | (toie3 & 1);
 	TIMSK3 = a;
 
-	CallbackInfo* info = &callbackInfo[3];
-	info->m_func = func;
-	info->m_arg = arg;
+	timer3CallbackInfo.m_func = func;
+	timer3CallbackInfo.m_arg = arg;
 }
 
 ISR(TIMER0_COMPA_vect)
 {
-	Callback func = callbackInfo[0].m_func;
-	void* arg = callbackInfo[0].m_arg;
+	Callback func = timer0CallbackInfo.m_func;
+	void* arg = timer0CallbackInfo.m_arg;
 	func(arg);
 }
 
-ISR(TIMER1_COMPA_vect)
+/*
+ISR(TIMER2_COMPA_vect)
 {
-	//sei();
-	//kdelay_ms(510);
-	Callback func = callbackInfo[1].m_func;
-	void* arg = callbackInfo[1].m_arg;
-	func(arg);
+	Callback func = timer2MatchCallbackInfo.m_func;
+	void* arg = timer2MatchCallbackInfo.m_arg;
+	if (func != 0)
+		func(arg);
 }
+
+ISR(TIMER2_OVF_vect)
+{
+	Callback func = timer2PeriodCallbackInfo.m_func;
+	void* arg = timer2PeriodCallbackInfo.m_arg;
+	if (func != 0)
+		func(arg);
+}
+*/
 
 ISR(TIMER3_COMPA_vect)
 {
-	Callback func = callbackInfo[3].m_func;
-	void* arg = callbackInfo[3].m_arg;
-	func(arg);
+	Callback func = timer3CallbackInfo.m_func;
+	void* arg = timer3CallbackInfo.m_arg;
+	if (func != 0)
+		func(arg);
 }

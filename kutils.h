@@ -1,6 +1,8 @@
 #ifndef _kutils_h_
 #define _kutils_h_
 
+#include "ktypes.h"
+
 // Parses str using whitespace and stores the start
 // of each non-whitespace string as a pointer in
 // argv[] and returns the count.
@@ -13,8 +15,6 @@
 //
 extern int make_argv(char** argv, char* str);
 
-// Returns non-zero on match.
-//
-int matchIgnoreCase(const char* s1, const char* s2, int maxLen);
+bool matchIgnoreCase(const char* s1, const char* s2, int maxLen);
 
 #endif // #ifndef _kutils_h_
