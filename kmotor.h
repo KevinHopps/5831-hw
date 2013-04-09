@@ -3,10 +3,12 @@
 
 #include "ktypes.h"
 
+// Connect the wheel encoder input to pins D2 and D3
+//
+
 typedef struct Motor_ Motor;
 struct Motor_
 {
-	int16_t m_currentAngle;
 	int16_t m_targetAngle;
 	float m_torque; // [0..1]
 	float m_Kp;

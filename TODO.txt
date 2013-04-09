@@ -1,0 +1,1 @@
+Make Motor be a local variable in main, no globals.

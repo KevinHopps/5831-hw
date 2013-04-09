@@ -27,18 +27,18 @@ int rotate_cmd(int argc, char** argv);
 int sei_cmd(int argc, char** argv);
 int cli_cmd(int argc, char** argv);
 
-static Motor theMotor;
+Motor theMotor;
 
 void InitCommands(CommandIO* ciop)
 {
 	CIORegisterCommand(ciop, "help", help_cmd);
 	CIORegisterCommand(ciop, "torque", torque_cmd);
+	CIORegisterCommand(ciop, "zero", zero_cmd);
+	CIORegisterCommand(ciop, "print", print_cmd);
+	CIORegisterCommand(ciop, "rotate", rotate_cmd);
 	/*
 	CIORegisterCommand(ciop, "kp", kp_cmd);
 	CIORegisterCommand(ciop, "kd", kd_cmd);
-	CIORegisterCommand(ciop, "print", print_cmd);
-	CIORegisterCommand(ciop, "zero", zero_cmd);
-	CIORegisterCommand(ciop, "rotate", rotate_cmd);
 	CIORegisterCommand(ciop, "sei", sei_cmd);
 	CIORegisterCommand(ciop, "cli", cli_cmd);
 	*/
@@ -74,6 +74,30 @@ int torque_cmd(int argc, char** argv)
 	float torque = atof(argv[1]);
 	s_println("Set torque=%s", s_ftos(torque));
 	MotorSetTorque(&theMotor, torque);
+	
+	return 0;
+}
+
+int zero_cmd(int argc, char** argv)
+{
+	s_println("zero");
+	MotorMakeCurrentAngleZero(&theMotor);
+	
+	return 0;
+}
+
+int print_cmd(int argc, char** argv)
+{
+	s_println("torque=%s", s_ftos(MotorGetTorque(&theMotor)));
+	s_println("angle=%d", MotorGetCurrentAngle(&theMotor));
+	
+	return 0;
+}
+
+int rotate_cmd(int argc, char** argv)
+{
+	int angle = atoi(argv[1]);
+	MotorSetTargetAngle(&theMotor, angle);
 	
 	return 0;
 }
