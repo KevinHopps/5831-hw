@@ -129,21 +129,15 @@ void setup_PWM_timer2(float dutyCycle)
 	uint8_t tccr2b = 0;
 	
 	tccr2a = 0;
-	s_println("wgm=%d, tccr2a=0x%02x", wgm, tccr2a);
 	set_bits(&tccr2a, 7, 6, 2*useA);
-	s_println("2*useA=%d, tccr2a=0x%02x", 2*useA, tccr2a);
 	set_bits(&tccr2a, 5, 4, 2*useB);
-	s_println("2*useB=%d, tccr2a=0x%02x", 2*useB, tccr2a);
 	set_bits(&tccr2a, 1, 0, wgm);
-	s_println("tccr2a=0x%02x", tccr2a);
 
 	tccr2b = 0;
 	wgm >>= 2;
 	set_bits(&tccr2b, 3, 3, wgm);
-	s_println("wgm>>2 is %d, tccr2b=0x%02x", wgm, tccr2b);
 	int cs = 5;
 	set_bits(&tccr2b, 2, 0, cs);
-	s_println("cs=%d, tccr2b=0x%02x", cs, tccr2b);
 	
 	TCCR2A = tccr2a;
 	TCCR2B = tccr2b;
@@ -157,8 +151,6 @@ void setup_PWM_timer2(float dutyCycle)
 		OCR2B = matchCount;
 
 	TIMSK2 = 0;
-	
-	s_println("TCCR2A=0x%02x, TCCR2B=0x%02x, matchCount=%d", tccr2a, tccr2b, matchCount);
 }
 
 void setup_CTC_timer3(uint16_t msecPeriod, Callback func, void* arg)

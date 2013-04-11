@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "kdebug.h"
 #include "kmotor.h"
 #include "kserial.h"
@@ -14,7 +15,11 @@
 #define ENCODER_BIT_A (1 << 2) // D2
 #define ENCODER_BIT_B (1 << 3) // D3
 #define ENCODER_BITS (ENCODER_BIT_A | ENCODER_BIT_B)
-#define ENCODER_TICKS_PER_REVOLUTION (127.49) // by experiment, 12749/100
+#define ENCODER_TICKS_PER_REVOLUTION (128.0) // by experiment, 12749/100
+#define ENCODER_DEGREES_PER_TICK (360.0 / ENCODER_TICKS_PER_REVOLUTION) // 2.82
+#define ENCODER_MAX_REVOLUTIONS_PER_SECOND (100.0 / 54.63) // by experiment, 1.83
+#define ENCODER_MAX_DEGREES_PER_SECOND (ENCODER_MAX_REVOLUTIONS_PER_SECOND * 360.0) // 658.98
+#define MIN_TORQUE (0.04) // min torque that makes motor turn
 
 static uint8_t oldBitA;
 static uint8_t oldBitB;
@@ -72,8 +77,8 @@ void MotorInit(Motor* motor)
 {
 	motor->m_targetAngle = 0;
 	motor->m_torque = 0.0;
-	motor->m_Kp = 0.0;
-	motor->m_Kd = 0.0;
+	motor->m_Kp = 0.005;
+	motor->m_Kd = 0.05;
 	
 	initMotorHW();
 	
@@ -102,19 +107,27 @@ float MotorGetKd(Motor* motor)
 
 void MotorSetTorque(Motor* motor, float torque)
 {
-	bool forward = true;
-	if (torque < 0.0f)
+	if (torque < -1.0)
+		torque = -1.0;
+	else if (torque > 1.0)
+		torque = 1.0;
+		
+	if (motor->m_torque != torque)
 	{
-		forward = false;
-		torque = -torque;
+		bool forward = true;
+		if (torque < 0.0)
+		{
+			forward = false;
+			torque = -torque;
+		}
+
+		setup_PWM_timer2(0.0);
+		delay_ms(1);		
+		setMotorDirection(forward);
+		setup_PWM_timer2(torque);
+
+		motor->m_torque = torque;
 	}
-
-	s_println("MotorSetTorque %s", s_ftos(torque));
-	
-	setMotorDirection(forward);
-	setup_PWM_timer2(torque);
-
-	motor->m_torque = torque;
 }
 
 float MotorGetTorque(Motor* motor)
@@ -128,18 +141,78 @@ void MotorMakeCurrentAngleZero(Motor* motor)
 	gEncoderCount = 0;
 }
 
+#define ABS(X) ((X) < 0 ? -(X) : (X))
+#define SGN(X) ((X) < 0 ? -1 : ((X) > 0 ? 1 : 0))
+#define MAX_ERROR (1)
+
 void MotorSetTargetAngle(Motor* motor, int16_t degrees)
 {
+	const int kDelayMS = 10;
 	motor->m_targetAngle = degrees;
-	int16_t delta;
-	while ((delta = motor->m_targetAngle - MotorGetCurrentAngle(motor)))
+	float desiredPos = motor->m_targetAngle;
+	float currentPos1 = MotorGetCurrentAngle(motor);
+	float lastPrintedPos = currentPos1 + 1; // force them unequal
+	float errorPos = 0.0;
+	bool done = false;
+	int nloops = 0;
+	while (!done)
 	{
-		// T = Kp(Pr - Pm) - Kd*Vm
-		if (delta < 0)
-			MotorSetTorque(motor, -0.1);
-		else
-			MotorSetTorque(motor, 0.1);
+		float currentPos0 = currentPos1;
+		delay_ms(kDelayMS);
+		currentPos1 = MotorGetCurrentAngle(motor);
+		float deltaPos = currentPos1 - currentPos0;
+		errorPos = desiredPos - currentPos1;
+		float velocity = deltaPos / kDelayMS;
+		float t = motor->m_Kp * errorPos - motor->m_Kd * velocity;
+		
+		if (lastPrintedPos != currentPos1)
+		{
+			lastPrintedPos = currentPos1;
+			char kps[16];
+			char prs[16];
+			char pms[16];
+			char kds[16];
+			char vms[16];
+			char ts[16];
+			char errs[16];
+			char kpvs[16];
+			char kdvs[16];
+			s_ftosb(kps, motor->m_Kp, 6);
+			s_ftosb(kds, motor->m_Kd, 6);
+			s_ftosb(prs, desiredPos, 1);
+			s_ftosb(pms, currentPos1, 1);
+			s_ftosb(vms, velocity, 6);
+			s_ftosb(errs, errorPos, 1);
+			s_ftosb(kpvs, motor->m_Kp * errorPos, 6);
+			s_ftosb(kdvs, motor->m_Kd * velocity, 6);
+			s_ftosb(ts, t, 3);
+			s_println("kp*(pr-pm)-kd*vm=%s*(%s-%s)-%s*%s=%s*%s-%s=%s-%s=%s",
+				kps, prs, pms, kds, vms, kps, errs, kdvs, kpvs, kdvs, ts);
+		}
+		
+		MotorSetTorque(motor, t);
+		if (t < 0.0)
+			t = -t;
+		if (t < MIN_TORQUE)
+			done = true;
 	}
+	
+	float oldErrorPos = 1000;
+	do
+	{
+		delay_ms(kDelayMS);
+		errorPos = desiredPos - MotorGetCurrentAngle(motor);
+		float t = MIN_TORQUE * SGN(errorPos);
+		if (oldErrorPos != errorPos)
+		{
+			oldErrorPos = errorPos;
+			s_printf("error=%s", s_ftos(errorPos, 5));
+			s_println(", t=%s", s_ftos(t, 3));
+		}
+		MotorSetTorque(motor, t);
+	}
+	while (ABS(errorPos) > MAX_ERROR);
+	
 	MotorSetTorque(motor, 0.0);
 }
 

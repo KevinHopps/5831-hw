@@ -113,9 +113,9 @@ int s_read(char* buf, int want, int msecTimeout)
 	return got;
 }
 
-char* s_ftosb(char* buf, double f)
+char* s_ftosbp(char** bpp, double f, int places)
 {
-	char* bp = buf;;
+	char* bp = *bpp;
 
 	if (f < 0.0)
 	{
@@ -123,24 +123,39 @@ char* s_ftosb(char* buf, double f)
 		f = -f;
 	}
 	
-	int n = (int)f;
-	bp += sprintf(bp, "%d", n);
+	long n = (long)f;
+	bp += sprintf(bp, "%ld", n);
 
 	f -= n;
-	n = (int)(f * 1000.0 + 0.5);
-	bp += sprintf(bp, ".%03d", n);
+	
+	char fmt[8];
+	sprintf(fmt, ".%c0%dld", '%', places);
+	while (--places >= 0)
+		f *= 10.0;
+	n = (long)(f + 0.5);
+	bp += sprintf(bp, fmt, n);
 
-	return buf;
+	char* result = *bpp;
+	*bpp = bp;
+	
+	return result;
 }
 
-char* s_ftos(double f)
+char* s_ftosb(char* buf, double f, int places)
+{
+	char* result = buf;
+	s_ftosbp(&buf, f, places);
+	return result;
+}
+
+char* s_ftos(double f, int places)
 {
 	static char buf[32];
-	return s_ftosb(buf, f);
+	return s_ftosb(buf, f, places);
 }
 
-int s_printflt(double f)
+int s_printflt(double f, int places)
 {
 	char buf[32];
-	return s_printf("%s", s_ftosb(buf, f));
+	return s_printf("%s", s_ftosb(buf, f, places));
 }

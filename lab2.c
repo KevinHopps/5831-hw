@@ -43,10 +43,5 @@ int main()
 			CIORunCommand(&cio);
 			
 		int16_t angle = MotorGetCurrentAngle(&theMotor);
-		if (angle != oldAngle)
-		{
-			oldAngle = angle;
-			s_println("angle=%d", angle);
-		}
 	}
 }
