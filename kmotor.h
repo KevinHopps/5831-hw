@@ -24,6 +24,7 @@ float MotorGetKd(Motor* motor);
 
 void MotorSetTorque(Motor* motor, float torque); // [-1,1]
 float MotorGetTorque(Motor* motor);
+float MotorGetMinTorque(Motor* motor);
 
 void MotorMakeCurrentAngleZero(Motor* motor);
 void MotorSetTargetAngle(Motor* motor, int16_t degrees); // can be multiple rotations

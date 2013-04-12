@@ -20,6 +20,18 @@
 #define ENCODER_MAX_REVOLUTIONS_PER_SECOND (100.0 / 54.63) // by experiment, 1.83
 #define ENCODER_MAX_DEGREES_PER_SECOND (ENCODER_MAX_REVOLUTIONS_PER_SECOND * 360.0) // 658.98
 #define MIN_TORQUE (0.04) // min torque that makes motor turn
+// At half speed (setting torque=0.5), the revolutions per second was
+// 70/66.02 and 70/64.69, or an average of 1.07 RPS.
+// With torque=0.25, we get 30/57.94, 30/57.66, or 0.52 RPS
+// With torque=1.0, we get 50/26.78, 50/26.61, 50/26.80 or 1.87 RPS
+// Torque RPS    Ratio to Full Speed
+// ------ -----  -------------------
+//  1.00   1.87   1.00
+//  0.50   1.07   0.57
+//  0.25   0.52   0.28
+// -1.00  -1.78  -0.95
+// -0.50  -1.09  -0.58
+// -0.25  -0.54  -0.29
 
 static uint8_t oldBitA;
 static uint8_t oldBitB;
@@ -135,85 +147,20 @@ float MotorGetTorque(Motor* motor)
 	return motor->m_torque;
 }
 
+float MotorGetMinTorque(Motor* motor)
+{
+	return MIN_TORQUE;
+}
+
 void MotorMakeCurrentAngleZero(Motor* motor)
 {
 	motor->m_targetAngle = 0;
 	gEncoderCount = 0;
 }
 
-#define ABS(X) ((X) < 0 ? -(X) : (X))
-#define SGN(X) ((X) < 0 ? -1 : ((X) > 0 ? 1 : 0))
-#define MAX_ERROR (1)
-
 void MotorSetTargetAngle(Motor* motor, int16_t degrees)
 {
-	const int kDelayMS = 10;
 	motor->m_targetAngle = degrees;
-	float desiredPos = motor->m_targetAngle;
-	float currentPos1 = MotorGetCurrentAngle(motor);
-	float lastPrintedPos = currentPos1 + 1; // force them unequal
-	float errorPos = 0.0;
-	bool done = false;
-	int nloops = 0;
-	while (!done)
-	{
-		float currentPos0 = currentPos1;
-		delay_ms(kDelayMS);
-		currentPos1 = MotorGetCurrentAngle(motor);
-		float deltaPos = currentPos1 - currentPos0;
-		errorPos = desiredPos - currentPos1;
-		float velocity = deltaPos / kDelayMS;
-		float t = motor->m_Kp * errorPos - motor->m_Kd * velocity;
-		
-		if (lastPrintedPos != currentPos1)
-		{
-			lastPrintedPos = currentPos1;
-			char kps[16];
-			char prs[16];
-			char pms[16];
-			char kds[16];
-			char vms[16];
-			char ts[16];
-			char errs[16];
-			char kpvs[16];
-			char kdvs[16];
-			s_ftosb(kps, motor->m_Kp, 6);
-			s_ftosb(kds, motor->m_Kd, 6);
-			s_ftosb(prs, desiredPos, 1);
-			s_ftosb(pms, currentPos1, 1);
-			s_ftosb(vms, velocity, 6);
-			s_ftosb(errs, errorPos, 1);
-			s_ftosb(kpvs, motor->m_Kp * errorPos, 6);
-			s_ftosb(kdvs, motor->m_Kd * velocity, 6);
-			s_ftosb(ts, t, 3);
-			s_println("kp*(pr-pm)-kd*vm=%s*(%s-%s)-%s*%s=%s*%s-%s=%s-%s=%s",
-				kps, prs, pms, kds, vms, kps, errs, kdvs, kpvs, kdvs, ts);
-		}
-		
-		MotorSetTorque(motor, t);
-		if (t < 0.0)
-			t = -t;
-		if (t < MIN_TORQUE)
-			done = true;
-	}
-	
-	float oldErrorPos = 1000;
-	do
-	{
-		delay_ms(kDelayMS);
-		errorPos = desiredPos - MotorGetCurrentAngle(motor);
-		float t = MIN_TORQUE * SGN(errorPos);
-		if (oldErrorPos != errorPos)
-		{
-			oldErrorPos = errorPos;
-			s_printf("error=%s", s_ftos(errorPos, 5));
-			s_println(", t=%s", s_ftos(t, 3));
-		}
-		MotorSetTorque(motor, t);
-	}
-	while (ABS(errorPos) > MAX_ERROR);
-	
-	MotorSetTorque(motor, 0.0);
 }
 
 int16_t MotorGetTargetAngle(Motor* motor)
@@ -223,7 +170,13 @@ int16_t MotorGetTargetAngle(Motor* motor)
 
 int16_t MotorGetCurrentAngle(Motor* motor)
 {
-	return 360 * gEncoderCount / ENCODER_TICKS_PER_REVOLUTION;
+	cli();
+	int32_t count = gEncoderCount; // This takes two instructions
+	sei();
+	
+	int16_t result = 360 * count / ENCODER_TICKS_PER_REVOLUTION;
+	
+	return result;
 }
 
 int16_t MotorGetDeltaAngle(Motor* motor)

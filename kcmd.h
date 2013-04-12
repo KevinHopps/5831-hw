@@ -8,7 +8,7 @@
 #define MAX_FUNCS 16
 #define MAX_NAMELEN 15
 
-typedef int (*CmdFunc)(int argc, char** argv);
+typedef int (*CmdFunc)(int argc, char** argv, void* context);
 
 typedef struct Command_ Command;
 struct Command_
@@ -26,10 +26,11 @@ struct CommandIO_
 	char* m_argv[MAX_ARGC];
 	Command m_cmd[MAX_FUNCS];
 	LineBuf m_lbuf;
+	void* m_context; // passed to the CmdFunc
 };
 typedef struct CommandIO_ CommandIO;
 
-void CIOReset(CommandIO* cmdp);
+void CIOReset(CommandIO* cmdp, void* context);
 void CIORegisterCommand(CommandIO* cmdp, const char* name, CmdFunc func);
 
 // This will scan for serial input and return nonzero when

@@ -4,19 +4,20 @@
 #include "kserial.h"
 #include "kutils.h"
 
-void CIOCommandReset(CommandIO* ciop)
+void CIOCommandReset(CommandIO* ciop, void* context)
 {
 	ciop->m_prompted = 0;
 	ciop->m_found = 0;
 	ciop->m_argc = 0;
 	ciop->m_argv[0] = 0;
 	LBReset(&ciop->m_lbuf);
+	ciop->m_context = context;
 }
 
-void CIOReset(CommandIO* ciop)
+void CIOReset(CommandIO* ciop, void* context)
 {
 	ciop->m_nfuncs = 0;
-	CIOCommandReset(ciop);
+	CIOCommandReset(ciop, context);
 }
 
 void CIORegisterCommand(CommandIO* ciop, const char* name, CmdFunc func)
@@ -31,7 +32,7 @@ void CIORegisterCommand(CommandIO* ciop, const char* name, CmdFunc func)
 int CIOIndex(CommandIO* ciop, const char* name)
 {
 	int i = ciop->m_nfuncs;
-	while (--i >= 0 && !matchIgnoreCase(name, ciop->m_cmd[i].m_name, strlen(name)))
+	while (--i >= 0 && strncmp(name, ciop->m_cmd[i].m_name, strlen(name)) != 0)
 		continue;
 	return i;
 }
@@ -56,7 +57,7 @@ bool CIOCheckForCommand(CommandIO* ciop)
 
 	if (!ciop->m_prompted)
 	{
-		CIOCommandReset(ciop);
+		CIOCommandReset(ciop, ciop->m_context);
 		s_printf("> ");
 		ciop->m_prompted = 1;
 	}
@@ -73,7 +74,7 @@ bool CIOCheckForCommand(CommandIO* ciop)
 			if (!result)
 			{
 				s_println("%s: not found", ciop->m_argv[0]);
-				CIOCommandReset(ciop);
+				CIOCommandReset(ciop, ciop->m_context);
 			}
 		}
 	}
@@ -84,5 +85,5 @@ bool CIOCheckForCommand(CommandIO* ciop)
 int CIORunCommand(CommandIO* ciop)
 {
 	KASSERT(ciop->m_found);
-	return ciop->m_found->m_func(ciop->m_argc, ciop->m_argv);
+	return ciop->m_found->m_func(ciop->m_argc, ciop->m_argv, ciop->m_context);
 }
