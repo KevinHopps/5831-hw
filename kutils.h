@@ -17,4 +17,7 @@ extern int make_argv(char** argv, char* str);
 
 bool matchIgnoreCase(const char* s1, const char* s2, int maxLen);
 
+#define ABS(X) ((X) < 0 ? -(X) : (X))
+#define SGN(X) ((X) < 0 ? -1 : ((X) > 0 ? 1 : 0))
+
 #endif // #ifndef _kutils_h_

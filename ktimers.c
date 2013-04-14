@@ -49,7 +49,7 @@ struct TimerSetup_
 };
 typedef struct TimerSetup_ TimerSetup;
 
-static TimerSetup calcTimerSetup(int msecPeriod, uint16_t maxTop)
+static TimerSetup calcTimerSetup(uint16_t msecPeriod, uint16_t maxTop)
 {
 	TimerSetup result = { 0, 0 };
 
@@ -68,6 +68,8 @@ static TimerSetup calcTimerSetup(int msecPeriod, uint16_t maxTop)
 	}
 
 	result.m_top = (int)ltop;
+	
+	KASSERT(result.m_top <= maxTop);
 
 	int derivedPeriod = (1000L * result.m_top * kPrescaleFrequency[result.m_cs]) / kClockFrequency;
 	s_println("calcTimerSetup: msecPeriod=%d, (1000L * top=%u * prescale[%d]=%d / kClockFrequency) = %d",

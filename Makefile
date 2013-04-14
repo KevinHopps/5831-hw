@@ -25,6 +25,8 @@ LIB= \
 	kserial.o \
 	ktimers.o \
 	kutils.o \
+	PDControl.o \
+	Trajectory.o \
 
 all: asgn1.hex stop.hex lab1.hex lab2.hex
 

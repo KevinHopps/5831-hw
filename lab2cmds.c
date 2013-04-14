@@ -3,10 +3,12 @@
 #include "kserial.h"
 #include "lab2cmds.h"
 
-void ContextInit(Context* ctx)
+void ContextInit(Context* ctx, Trajectory* tp, PDControl* pdc, Motor* mp)
 {
 	ctx->m_logging = false;
-	MotorInit(&ctx->m_motor);
+	ctx->m_tp = tp;
+	ctx->m_pdc = pdc;
+	ctx->m_motor = mp;
 }
 
 // help
@@ -88,6 +90,8 @@ static void showHelp()
 		"        current-angle",
 		"    torque [new_value]",
 		"    rotate degrees {rotate the motor}",
+		"    go",
+		"    stop",
 		0 // sentinel
 	};
 	
@@ -124,7 +128,7 @@ int P_cmd(int argc, char** argv, void* context)
 	float delta = incrKp;
 	if (**argv == 'p')
 		delta = -delta;
-	MotorSetKp(&ctx->m_motor, MotorGetKp(&ctx->m_motor) + delta);
+	PDControlSetKp(ctx->m_pdc, PDControlGetKp(ctx->m_pdc) + delta);
 	
 	return 0;
 }
@@ -140,7 +144,7 @@ int D_cmd(int argc, char** argv, void* context)
 	float delta = incrKp;
 	if (**argv == 'd')
 		delta = -delta;
-	MotorSetKd(&ctx->m_motor, MotorGetKd(&ctx->m_motor) + delta);
+	PDControlSetKd(ctx->m_pdc, PDControlGetKd(ctx->m_pdc) + delta);
 	
 	return 0;
 }
@@ -151,7 +155,7 @@ int kp_cmd(int argc, char** argv, void* context)
 		showHelp();
 		
 	Context* ctx = (Context*)context;
-	MotorSetKp(&ctx->m_motor, atof(argv[1]));
+	PDControlSetKp(ctx->m_pdc, atof(argv[1]));
 	
 	return 0;
 }
@@ -162,7 +166,7 @@ int kd_cmd(int argc, char** argv, void* context)
 		showHelp();
 		
 	Context* ctx = (Context*)context;
-	MotorSetKd(&ctx->m_motor, atof(argv[1]));
+	PDControlSetKd(ctx->m_pdc, atof(argv[1]));
 	
 	return 0;
 }
@@ -170,10 +174,10 @@ int kd_cmd(int argc, char** argv, void* context)
 int info_cmd(int argc, char** argv, void* context)
 {
 	Context* ctx = (Context*)context;
-	s_println("torque=%s", s_ftos(MotorGetTorque(&ctx->m_motor), 3));
-	s_println("angle=%d", MotorGetCurrentAngle(&ctx->m_motor));
-	s_println("Kp=%s", s_ftos(MotorGetKp(&ctx->m_motor), 5));
-	s_println("Kd=%s", s_ftos(MotorGetKd(&ctx->m_motor), 5));
+	s_println("torque=%s", s_ftos(MotorGetTorque(ctx->m_motor), 3));
+	s_println("angle=%d", MotorGetCurrentAngle(ctx->m_motor));
+	s_println("Kp=%s", s_ftos(PDControlGetKp(ctx->m_pdc), 5));
+	s_println("Kd=%s", s_ftos(PDControlGetKd(ctx->m_pdc), 5));
 	
 	return 0;
 }
@@ -185,7 +189,7 @@ int torque_cmd(int argc, char** argv, void* context)
 		
 	float torque = atof(argv[1]);
 	Context* ctx = (Context*)context;
-	MotorSetTorque(&ctx->m_motor, torque);
+	MotorSetTorque(ctx->m_motor, torque);
 	
 	return 0;
 }
@@ -197,7 +201,27 @@ int rotate_cmd(int argc, char** argv, void* context)
 		
 	int angle = atoi(argv[1]);
 	Context* ctx = (Context*)context;
-	MotorSetTargetAngle(&ctx->m_motor, angle);
+	TrajectoryRotate(ctx->m_tp, angle);
 	
+	return 0;
+}
+
+int go_cmd(int argc, char** argv, void* context)
+{
+	Context* ctx = (Context*)context;
+
+	PDControlSetEnabled(ctx->m_pdc, true);
+	TrajectorySetEnabled(ctx->m_tp, true);
+
+	return 0;
+}
+
+int stop_cmd(int argc, char** argv, void* context)
+{
+	Context* ctx = (Context*)context;
+
+	PDControlSetEnabled(ctx->m_pdc, false);
+	TrajectorySetEnabled(ctx->m_tp, false);
+
 	return 0;
 }

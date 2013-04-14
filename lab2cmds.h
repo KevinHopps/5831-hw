@@ -3,14 +3,17 @@
 
 #include "kcmd.h"
 #include "kmotor.h"
+#include "Trajectory.h"
 
 typedef struct Context_ Context;
 struct Context_
 {
 	bool m_logging;
-	Motor m_motor;
+	Trajectory* m_tp;
+	PDControl* m_pdc;
+	Motor* m_motor;
 };
-void ContextInit(Context* ctx);
+void ContextInit(Context* ctx, Trajectory* tp, PDControl* pdc, Motor* mp);
 
 void InitCommands(CommandIO* cio);
 

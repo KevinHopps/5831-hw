@@ -87,38 +87,17 @@ static void setMotorDirection(bool forward)
 
 void MotorInit(Motor* motor)
 {
-	motor->m_targetAngle = 0;
 	motor->m_torque = 0.0;
-	motor->m_Kp = 0.005;
-	motor->m_Kd = 0.05;
 	
 	initMotorHW();
 	
 	MotorSetTorque(motor, 0.0);
 }
 
-void MotorSetKp(Motor* motor, float Kp)
-{
-	motor->m_Kp = Kp;
-}
-
-float MotorGetKp(Motor* motor)
-{
-	return motor->m_Kp;
-}
-
-void MotorSetKd(Motor* motor, float Kd)
-{
-	motor->m_Kd = Kd;
-}
-
-float MotorGetKd(Motor* motor)
-{
-	return motor->m_Kd;
-}
-
 void MotorSetTorque(Motor* motor, float torque)
 {
+	s_println("MotorSetTorque %s", s_ftos(torque, 2));
+	
 	if (torque < -1.0)
 		torque = -1.0;
 	else if (torque > 1.0)
@@ -147,27 +126,6 @@ float MotorGetTorque(Motor* motor)
 	return motor->m_torque;
 }
 
-float MotorGetMinTorque(Motor* motor)
-{
-	return MIN_TORQUE;
-}
-
-void MotorMakeCurrentAngleZero(Motor* motor)
-{
-	motor->m_targetAngle = 0;
-	gEncoderCount = 0;
-}
-
-void MotorSetTargetAngle(Motor* motor, int16_t degrees)
-{
-	motor->m_targetAngle = degrees;
-}
-
-int16_t MotorGetTargetAngle(Motor* motor)
-{
-	return motor->m_targetAngle;
-}
-
 int16_t MotorGetCurrentAngle(Motor* motor)
 {
 	cli();
@@ -177,9 +135,4 @@ int16_t MotorGetCurrentAngle(Motor* motor)
 	int16_t result = 360 * count / ENCODER_TICKS_PER_REVOLUTION;
 	
 	return result;
-}
-
-int16_t MotorGetDeltaAngle(Motor* motor)
-{
-	return MotorGetTargetAngle(motor) - MotorGetCurrentAngle(motor);
 }
