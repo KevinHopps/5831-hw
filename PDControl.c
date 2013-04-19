@@ -20,6 +20,9 @@ void TorqueCalcInit(TorqueCalc* tcp)
 	tcp->m_torqueMagnitudeTooLow = false;
 }
 
+// This compares two TorqueCalc structures and
+// returns true if they are equal.
+//
 bool EqualTorqueCalc(const TorqueCalc* tcp1, const TorqueCalc* tcp2)
 {
 	return true
@@ -114,8 +117,8 @@ void PDControlSetEnabled(PDControl* pdc, bool enabled)
 	if (pdc->m_enabled != enabled)
 	{
 		pdc->m_enabled = enabled;
-		pdc->m_ready = false;
-		pdc->m_targetAngleSet = false;
+		pdc->m_ready = false; // must now do work to allow velocity calculation
+		pdc->m_targetAngleSet = false; // must now set a new target angle
 	}
 }
 
@@ -124,8 +127,8 @@ bool PDControlIsEnabled(PDControl* pdc)
 	return pdc->m_enabled;
 }
 
-#define MAX_ERROR 1
-#define MAX_DELTA_TORQUE (MOTOR_MAX_TORQUE / 2)
+#define MAX_ERROR 1 // what is considered "close enough"
+#define MAX_DELTA_TORQUE (MOTOR_MAX_TORQUE / 8) // limits acceleration
 
 // This is called from the timer0 interrupt vector. This *is* the
 // PDController task.
@@ -162,6 +165,9 @@ void PDControlTask(void* arg)
 		uint32_t elapsed = currentMSec - pdc->m_lastMSec;
 		if (elapsed > 0)
 		{
+			// m_calc records this calculation so it may be recalled
+			// by the logging task, invoked by the main loop.
+			//
 			++pdc->m_calcIndex;
 			TorqueCalcInit(&pdc->m_calc);
 			
@@ -178,17 +184,17 @@ void PDControlTask(void* arg)
 				torque = pdc->m_kp * errorAngle - pdc->m_kd * pdc->m_calc.m_velocity;
 				pdc->m_calc.m_torqueCalculated = torque;
 				
-				pdc->m_calc.m_torqueChangeTooHigh = true;
+				pdc->m_calc.m_torqueChangeTooHigh = true; // assume the worse, fix below if ok
 				int16_t minTorque = lastTorque - MAX_DELTA_TORQUE;
 				if (torque < minTorque)
-					torque = minTorque;
+					torque = minTorque; // acceleration too high, limit it
 				else
 				{
 					int16_t maxTorque = lastTorque + MAX_DELTA_TORQUE;
 					if (torque > maxTorque)
-						torque = maxTorque;
+						torque = maxTorque; // acceleration too high, limit it
 					else
-						pdc->m_calc.m_torqueChangeTooHigh = false;
+						pdc->m_calc.m_torqueChangeTooHigh = false; // acceleration ok after all
 				}
 				
 				// If the torque magnitude is too small to produce movement,
@@ -196,30 +202,24 @@ void PDControlTask(void* arg)
 				//
 				if (-MOTOR_MIN_TORQUE < torque && torque < MOTOR_MIN_TORQUE)
 				{
-					pdc->m_calc.m_torqueMagnitudeTooLow = true;
+					pdc->m_calc.m_torqueMagnitudeTooLow = true; // assume the worse, fix below if ok
 					if (torque < 0)
 						torque = -MOTOR_MIN_TORQUE;
 					else if (torque > 0)
 						torque = MOTOR_MIN_TORQUE;
 					else
-						pdc->m_calc.m_torqueMagnitudeTooLow = false;
+						pdc->m_calc.m_torqueMagnitudeTooLow = false; // magnitude ok after all
 				}
 			}
 
-			pdc->m_calc.m_torqueMagnitudeTooHigh = true;
+			pdc->m_calc.m_torqueMagnitudeTooHigh = true; // assume the worst, fix below if ok
 			if (torque < -MOTOR_MAX_TORQUE)
 				torque = -MOTOR_MAX_TORQUE;
 			else if (torque > MOTOR_MAX_TORQUE)
 				torque = MOTOR_MAX_TORQUE;
 			else
-				pdc->m_calc.m_torqueMagnitudeTooHigh = false;
+				pdc->m_calc.m_torqueMagnitudeTooHigh = false; // magnitude ok after all
 			
-			static int32_t lastTorque;
-			if (lastTorque != torque)
-			{
-				lastTorque = torque;
-				dbg_println("index=%ld, T=%ld", pdc->m_calcIndex, torque);
-			}
 			pdc->m_calc.m_torqueUsed = (int16_t)torque;
 			MotorSetTorque(pdc->m_motor, (int16_t)torque);
 		}
@@ -229,10 +229,15 @@ void PDControlTask(void* arg)
 	pdc->m_lastAngle = currentAngle;
 }
 
+// Return the last torque calculation performed.
+//
 uint32_t PDControlGetTorqueCalc(PDControl* pdc, TorqueCalc* tcp)
 {
 	uint32_t result = 0;
 	
+	// Just to make sure we don't start performing a new calulcation
+	// in the middle of copying this one, we turn interrupts off.
+	//
 	BEGIN_ATOMIC
 		*tcp = pdc->m_calc;
 		result = pdc->m_calcIndex;

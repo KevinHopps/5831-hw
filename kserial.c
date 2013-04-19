@@ -9,7 +9,8 @@ void empty_sendbuf()
 	do
 	{
 		serial_check();
-	} while (!serial_send_buffer_empty(USB_COMM));
+	}
+	while (!serial_send_buffer_empty(USB_COMM));
 }
 
 void s_write(const char* buf, int len)

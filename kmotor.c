@@ -102,7 +102,7 @@ void MotorInit(Motor* motor)
 	MotorSetTorque(motor, 0);
 }
 
-void MotorSetTorque(Motor* motor, int16_t torque)
+void MotorSetTorque(Motor* motor, MotorTorque torque)
 {
 	if (torque < -MOTOR_MAX_TORQUE)
 		torque = -MOTOR_MAX_TORQUE;
@@ -128,7 +128,7 @@ void MotorSetTorque(Motor* motor, int16_t torque)
 	}
 }
 
-int16_t MotorGetTorque(Motor* motor)
+MotorTorque MotorGetTorque(Motor* motor)
 {
 	return motor->m_torque;
 }

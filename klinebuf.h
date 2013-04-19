@@ -1,16 +1,26 @@
 #ifndef _klinebuf_h_
 #define _klinebuf_h_
 
+#include "ktypes.h"
+
+typedef struct LineBuf_ LineBuf;
 struct LineBuf_
 {
 	uint8_t m_len;
-	uint8_t m_frozen;
-	char m_buf[30];
+	bool m_frozen;
+	char m_buf[64];
 };
-typedef struct LineBuf_ LineBuf;
 
+// Reset the structure to be empty.
+//
 void LBReset(LineBuf* lbuf);
+
+// Return the current length of the line of input.
+//
 int LBLength(const LineBuf* lbuf);
+
+// Return the character at the specified index.
+//
 int LBCharAt(const LineBuf* lbuf, int index);
 
 // This will possibly read characters into lbuf->m_buf each

@@ -6,6 +6,10 @@ static bool iswhite(char c)
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
+// Parse the given str and make argv[] point into it at
+// the beginning of the non-white substrings. Return the
+// number of items in argv[].
+//
 int make_argv(char** argv, char* str)
 {
 	int argc = 0;
@@ -23,7 +27,7 @@ int make_argv(char** argv, char* str)
 		}
 	}
 
-	argv[argc] = 0;
+	argv[argc] = NULL;
 	return argc;
 }
 
@@ -45,13 +49,10 @@ bool matchIgnoreCase(const char* s1, const char* s2, int maxLen)
 		}
 		else
 		{
-			if ('A' <= c1 && c1 <= 'Z')
-				c1 += 'a' - 'A';
-
-			if ('A' <= c2 && c2 <= 'Z')
-				c2 += 'a' - 'A';
-
-			if (c1 != c2)
+			static const int to_lower = (int)'a' - (int)'A';
+			static const int to_upper = -to_lower;
+			int diff = (int)c1 - (int)c2;
+			if (diff != to_lower && diff != to_upper)
 				match = false;
 		}
 	}
@@ -59,20 +60,27 @@ bool matchIgnoreCase(const char* s1, const char* s2, int maxLen)
 	return match;
 }
 
+// Return true iff interrupts are currently enabled.
+//
 bool getInterruptsEnabled()
 {
-	uint8_t sreg = SREG;
-	uint8_t bit = 1 << SREG_I;
+	uint8_t sreg = SREG; // get status register contents
+	uint8_t bit = 1 << SREG_I; // interrupts-enabled bit
 	uint8_t result = sreg & bit;
-	return result;
+	return result != 0;
 }
 
+// Enable or disable interrupts. Return the previous
+// interrupts-enabled state.
+//
 bool setInterruptsEnabled(bool enable)
 {
 	bool result = getInterruptsEnabled();
+	
 	if (enable)
 		sei();
 	else
 		cli();
+		
 	return result;
 }

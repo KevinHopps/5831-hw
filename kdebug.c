@@ -16,8 +16,8 @@ void die(const char* msg)
 	beep();
 	set_motors(0, 0);
 	s_println("** KASSERT failed: %s", msg);
-	int beep_delay = 250;
-	int beep_time = 1;
+	int beep_delay = 1000;
+	int beep_time = 5;
 	int nbeeps = beep_time * 1000 / beep_delay;
 	while (--nbeeps >= 0)
 	{
@@ -28,7 +28,7 @@ void die(const char* msg)
 		continue;
 }
 
-char dbg_buf[256];
+char dbg_buf[DEBUG_BUFSIZE];
 char* dbg_bp = dbg_buf;
 
 static int dbg_printPlus(const char* extra, const char* fmt, va_list ap)

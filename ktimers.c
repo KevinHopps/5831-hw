@@ -1,9 +1,9 @@
 #include <pololu/orangutan.h>
+#include "kdebug.h"
 #include "kio.h"
 #include "kserial.h"
 #include "ktimers.h"
 #include "ktypes.h"
-#include "kdebug.h"
 
 #define WGM1_NORMAL 0 // TOP=0xffff OCRnx=immediate TOVn=MAX
 #define WGM1_PWM_PHASE_CORRECT_8_BIT 1 // TOP=0x00ff, OCRnx=TOP, TOVn=BOTTOM
@@ -50,6 +50,12 @@ struct TimerSetup_
 	uint16_t m_top;
 };
 
+// This calculates a timer setup to achieve the specified period as closely as
+// possible. This is done by making the prescale as small as possible such that
+// the top value is <= maxTop. This is called for both 8-bit and 16-bit timers,
+// so maxTop may be 0xff or 0xffff. This will fail if the period is too long
+// given the contraints of maxTop and max prescale.
+//
 static uint16_t calcTimerSetup(TimerSetup* tsp, uint16_t msecPeriod, uint16_t maxTop)
 {
 	uint32_t ltop = 0;
@@ -68,27 +74,24 @@ static uint16_t calcTimerSetup(TimerSetup* tsp, uint16_t msecPeriod, uint16_t ma
 
 	KASSERT(ltop <= maxTop);
 	
-	tsp->m_top = (int)ltop;
-
 	uint16_t derivedPeriod = (1000L * tsp->m_top * kPrescaleFrequency[tsp->m_cs]) / kClockFrequency;
-	s_println("calcTimerSetup: msecPeriod=%d, (1000L * top=%u * prescale[%d]=%d / kClockFrequency) = %d",
-		msecPeriod, tsp->m_top, tsp->m_cs, kPrescaleFrequency[tsp->m_cs], derivedPeriod);
+	tsp->m_top = (uint16_t)ltop;
 
 	return derivedPeriod;
 }
 
+// Sets up a CTC using timer 0. The callback func will be invoked
+// by the ISR. This function will fail if the period is too large.
+//
 void setup_CTC_timer0(uint16_t msecPeriod, Callback func, void* arg)
 {
-	uint16_t derivedPeriod = 0;
 	TimerSetup ts;
 
 	if (msecPeriod > 0)
 	{
 		uint16_t maxTop = 0xff; // timer0 uses 8-bit registers
-		derivedPeriod = calcTimerSetup(&ts, msecPeriod, maxTop);
+		calcTimerSetup(&ts, msecPeriod, maxTop);
 	}
-
-	s_println("setup_CTC_timer0: cs=%d, top=%u, derivedPeriod=%u", ts.m_cs, ts.m_top, derivedPeriod);
 
 	int com0a = 0;
 	int com0b = 0;
@@ -112,6 +115,14 @@ void setup_CTC_timer0(uint16_t msecPeriod, Callback func, void* arg)
 	timer0CallbackInfo.m_arg = arg;
 }
 
+// This sets the bits from [lowest,highest] in *lvalue, leaving
+// other bits unchanged. For example:
+//     uint8_t x = 0xff; // 11111111
+//     uint8_t y = 0x00; // 00000000
+//     set_bits(&x, 5, 2, 6); // 11.0110.11
+//     set_bits(&y, 5, 2, 6); // 00.0110.00
+//     KASSERT(x == 0xdb && y == 0x18);
+//
 void set_bits(uint8_t* lvalue, int highest, int lowest, int value)
 {
 	int nbits = highest - lowest + 1;
@@ -124,18 +135,16 @@ void set_bits(uint8_t* lvalue, int highest, int lowest, int value)
 
 void setup_PWM_timer2(uint8_t dutyCycle)
 {
-	int useA = 0;
-	int useB = 1;
-	int wgm = WGM2_PWM_PHASE_CORRECT_TOP_FF;
-	uint8_t tccr2a = 0;
-	uint8_t tccr2b = 0;
+	uint8_t useA = 0; // one of useA/useB should be one and the other zero
+	uint8_t useB = 1; // they specify which counter to use, A or B.
+	uint8_t wgm = WGM2_PWM_PHASE_CORRECT_TOP_FF;
 	
-	tccr2a = 0;
+	uint8_t tccr2a = 0;
 	set_bits(&tccr2a, 7, 6, 2*useA);
 	set_bits(&tccr2a, 5, 4, 2*useB);
 	set_bits(&tccr2a, 1, 0, wgm);
 
-	tccr2b = 0;
+	uint8_t tccr2b = 0;
 	wgm >>= 2;
 	set_bits(&tccr2b, 3, 3, wgm);
 	int cs = 5;
@@ -155,35 +164,35 @@ void setup_PWM_timer2(uint8_t dutyCycle)
 	TIMSK2 = 0;
 }
 
+// Sets up a CTC using timer 3. The callback func will be invoked
+// by the ISR. This function will fail if the period is too large.
+//
 void setup_CTC_timer3(uint16_t msecPeriod, Callback func, void* arg)
 {
-	uint16_t derivedPeriod = 0;
 	TimerSetup ts;
-	int com0a = 0; // 0 for "normal" mode
-	int com0b = 0; // 0 for "normal" mode
-	int wgm = 4; // OCR3 for TOP
-	int icnc = 0; // input capture noise canceller
-	int ices = 0; // image capture edge select
+	uint8_t com0a = 0; // 0 for "normal" mode
+	uint8_t com0b = 0; // 0 for "normal" mode
+	uint8_t wgm = 4; // OCR3 for TOP
+	uint8_t icnc = 0; // input capture noise canceller
+	uint8_t ices = 0; // image capture edge select
 
 	if (msecPeriod > 0)
 	{
 		uint16_t maxTop = 0xffff; // timer3 uses 16-bit registers
-		derivedPeriod = calcTimerSetup(&ts, msecPeriod, maxTop);
+		calcTimerSetup(&ts, msecPeriod, maxTop);
 	}
 
-	s_println("setup_CTC_timer3 cs=%d, top=%u, derivedPeriod=%u", ts.m_cs, ts.m_top, derivedPeriod);
-
-	int a = ((com0a & 3) << 6) | ((com0b & 3) << 4) | (wgm & 3);
-	int b = ((icnc & 1) << 7) | ((ices & 1) << 6) | (((wgm >> 2) & 3) << 3) | (ts.m_cs & 7);
+	uint8_t a = ((com0a & 3) << 6) | ((com0b & 3) << 4) | (wgm & 3);
+	uint8_t b = ((icnc & 1) << 7) | ((ices & 1) << 6) | (((wgm >> 2) & 3) << 3) | (ts.m_cs & 7);
 	TCCR3A = a;
 	TCCR3B = b;
 
 	OCR3A = ts.m_top;
 
-	int icie3 = 0;
-	int ocie3b = 0;
-	int ocie3a = (msecPeriod > 0); // enable Timer/Counter3 Output Compare A Match interrupt
-	int toie3 = 0;
+	uint8_t icie3 = 0;
+	uint8_t ocie3b = 0;
+	uint8_t ocie3a = (msecPeriod > 0); // enable Timer/Counter3 Output Compare A Match uint8_terrupt
+	uint8_t toie3 = 0;
 	a = ((icie3 & 1) << 5) | ((ocie3b & 1) << 2) | ((ocie3a & 1) << 1) | (toie3 & 1);
 	TIMSK3 = a;
 
@@ -197,24 +206,6 @@ ISR(TIMER0_COMPA_vect)
 	void* arg = timer0CallbackInfo.m_arg;
 	func(arg);
 }
-
-/*
-ISR(TIMER2_COMPA_vect)
-{
-	Callback func = timer2MatchCallbackInfo.m_func;
-	void* arg = timer2MatchCallbackInfo.m_arg;
-	if (func != 0)
-		func(arg);
-}
-
-ISR(TIMER2_OVF_vect)
-{
-	Callback func = timer2PeriodCallbackInfo.m_func;
-	void* arg = timer2PeriodCallbackInfo.m_arg;
-	if (func != 0)
-		func(arg);
-}
-*/
 
 ISR(TIMER3_COMPA_vect)
 {

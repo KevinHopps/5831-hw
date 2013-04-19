@@ -41,8 +41,7 @@ MotorAngle TrajectoryGetCurrentAngle(Trajectory* tp)
 //
 void TrajectorySetEnabled(Trajectory* tp, bool enabled)
 {
-	if (tp->m_enabled != enabled)
-		tp->m_enabled = enabled;
+	tp->m_enabled = enabled;
 }
 
 // This returns true if the Trajectory Interpolator task is enabled.

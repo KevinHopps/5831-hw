@@ -3,8 +3,12 @@
 
 #include <pololu/orangutan.h>
 
+// This will not return until the serial send buffer is empty.
+//
 void empty_sendbuf();
 
+// This will not return until all characters have been written.
+//
 void s_write(const char* buf, int len);
 
 // This function will read up to want bytes of data
@@ -16,12 +20,18 @@ void s_write(const char* buf, int len);
 //
 int s_read(char* buf, int want, int msecTimeout);
 
+// This function works just like printf. If you want a new line
+// at the end, you may append s_eol[] chars or use s_println().
+//
 int s_printf(const char* fmt, ...);
-int dbg_printf(const char* fmt, ...);
 
+// The character sequence that produces a carriage return plus linefeed.
+//
 extern const char s_eol[];
 
-int s_println(const char* fmt, ...); // s_printf plus s_eol
+// Just like s_printf(), but puts s_eol at the end.
+//
+int s_println(const char* fmt, ...);
 
 #ifndef USE_FLOATS
 #define USE_FLOATS 0

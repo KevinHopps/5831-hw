@@ -7,6 +7,10 @@
 
 #define PDCONTROL_MAX_ROTATION 180
 
+// The TorqueCalc structure is filled in by the PDControl task when it
+// calculates a new torque. This is remembered so that the logging task
+// in the main loop may retrieve it if desired.
+//
 typedef struct TorqueCalc_ TorqueCalc;
 struct TorqueCalc_
 {
@@ -24,20 +28,22 @@ struct TorqueCalc_
 void TorqueCalcInit(TorqueCalc* tcp);
 bool EqualTorqueCalc(const TorqueCalc* tcp1, const TorqueCalc* tcp2);
 
+// This is all of the data needed by the PDControl task.
+//
 typedef struct PDControl_ PDControl;
 struct PDControl_
 {
-	bool m_enabled;
-	bool m_targetAngleSet;
-	bool m_ready;
-	MotorAngle m_lastAngle;
-	MotorAngle m_targetAngle;
-	float m_kp;
-	float m_kd;
-	uint32_t m_lastMSec;
+	bool m_enabled; // task is allowed to run
+	bool m_targetAngleSet; // user has set a target angle
+	bool m_ready; // set on 2nd iter, so velocity can be calculated
+	MotorAngle m_lastAngle; // angle during previous iteration
+	MotorAngle m_targetAngle; // where we're trying to go
+	float m_kp; // used in torque calculation
+	float m_kd; // used in torque calculation
+	uint32_t m_lastMSec; // time of last iteration
 	Motor* m_motor;
-	uint32_t m_calcIndex;
-	TorqueCalc m_calc;
+	uint32_t m_calcIndex; // incremented each time m_calc is filled in
+	TorqueCalc m_calc; // record of last torque calculation
 };
 
 // This initializes the PDControl structure and its task. The
@@ -76,10 +82,6 @@ void PDControlResetCurrentAngle(PDControl* pdc);
 //
 void PDControlSetEnabled(PDControl* pdc, bool enabled);
 bool PDControlIsEnabled(PDControl* pdc);
-
-bool PDControlSetLogging(PDControl* pdc, bool enabled);
-bool PDControlGetLogging(PDControl* pdc);
-const char* PDControlGetLog(PDControl* pdc);
 
 // This is the PDController task, which is called
 // from the interrupt handler. The arg parameter is a void*

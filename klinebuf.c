@@ -5,7 +5,7 @@
 void LBReset(LineBuf* lbuf)
 {
 	lbuf->m_len = 0;
-	lbuf->m_frozen = 0;
+	lbuf->m_frozen = false;
 }
 
 int LBLength(const LineBuf* lbuf)
@@ -21,7 +21,7 @@ int LBCharAt(const LineBuf* lbuf, int index)
 
 char* LBFreeze(LineBuf* lbuf)
 {
-	lbuf->m_frozen = 1;
+	lbuf->m_frozen = true;
 	lbuf->m_buf[lbuf->m_len] = 0;
 	return lbuf->m_buf;
 }
@@ -46,7 +46,7 @@ void LBPut(LineBuf* lbuf, char c)
 
 char* LBGetLine(LineBuf* lbuf)
 {
-	char* result = 0;
+	char* result = NULL;
 
 	char c;
 	while (result == 0 && s_read(&c, 1, 0) > 0)
@@ -58,9 +58,12 @@ char* LBGetLine(LineBuf* lbuf)
 		}
 		else if (c == ERASE)
 		{
-			static const char erase[] = { 8, 32, 8 };
-			s_write(erase, sizeof(erase));
-			LBErase(lbuf);
+			static const char erase[] = { 8, 32, 8 }; // BS, SP, BS
+			if (lbuf->m_len > 0)
+			{
+				s_write(erase, sizeof(erase));
+				LBErase(lbuf);
+			}
 		}
 		else
 		{
