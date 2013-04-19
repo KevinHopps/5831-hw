@@ -14,7 +14,7 @@
 //
 
 #define MAX_ARGC 8 // max argc for any command
-#define MAX_FUNCS 16 // max commands that can be registered
+#define MAX_FUNCS 24 // max commands that can be registered
 #define MAX_NAMELEN 15 // max name of any command, not including null terminator
 
 // This is the signature of a command that gets invoked.

@@ -3,8 +3,8 @@
 #include "kutils.h"
 #include "Trajectory.h"
 
-// Initialize the structure and setup timer3. The TrajectoryTask
-// function will be called by the interrupt handler for timer3,
+// Initialize the structure and setup timer 0. The TrajectoryTask
+// function will be called by the interrupt handler for timer 0,
 // and the Trajectory* will be passed to it.
 //
 void TrajectoryInit(Trajectory* tp, PDControl* pdc, uint16_t msecPeriod)
@@ -13,7 +13,7 @@ void TrajectoryInit(Trajectory* tp, PDControl* pdc, uint16_t msecPeriod)
 	tp->m_targetAngle = 0;
 	tp->m_pdc = pdc;
 
-	setup_CTC_timer3(msecPeriod, TrajectoryTask, tp);
+	setup_CTC_timer0(msecPeriod, TrajectoryTask, tp);
 }
 
 // This adjusts the current target angle. The TrajectoryTask will
@@ -51,7 +51,7 @@ bool TrajectoryIsEnabled(Trajectory* tp)
 	return tp->m_enabled;
 }
 
-// This is called from the timer3 interrupt vector. This *is* the
+// This is called from the timer 0 interrupt vector. This *is* the
 // Trajectory Interpolator task.
 //
 void TrajectoryTask(void* arg)

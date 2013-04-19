@@ -36,6 +36,8 @@ struct PDControl_
 	bool m_enabled; // task is allowed to run
 	bool m_targetAngleSet; // user has set a target angle
 	bool m_ready; // set on 2nd iter, so velocity can be calculated
+	uint8_t m_maxAccel; // max delta torque is MOTOR_MAX_TORQUE/m_maxAccel
+	uint16_t m_period; // period of the PDControl task
 	MotorAngle m_lastAngle; // angle during previous iteration
 	MotorAngle m_targetAngle; // where we're trying to go
 	float m_kp; // used in torque calculation
@@ -50,6 +52,17 @@ struct PDControl_
 // periodMSec specifies the period of this task.
 //
 void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec);
+
+// Adjust the period of the PDControl task
+//
+uint16_t PDControlGetPeriod(PDControl* pdc);
+void PDControlSetPeriod(PDControl* pdc, uint16_t periodMSec);
+
+// Adjust the max acceleration factor. So that the max delta
+// torque is MOTOR_MAX_TORQUE/maxAccel
+//
+uint8_t PDControlGetMaxAccel(PDControl* pdc);
+void PDControlSetMaxAccel(PDControl* pdc, uint8_t maxAccel);
 
 // These get/set the Kp parameter, used in the formula
 //     t = Kp*errorPosition + Kd*velocity

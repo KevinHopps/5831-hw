@@ -111,8 +111,8 @@ void ConsoleTask(CommandIO* ciop)
 	}
 }
 
-#define PDCONTROLLER_PERIOD_MSEC 10 // max 13
-#define TRAJECTORY_PERIOD_MSEC 100 // max 3355
+#define PDCONTROLLER_PERIOD_MSEC 100 // max 3355
+#define TRAJECTORY_PERIOD_MSEC 10 // max 13
 
 int main()
 {
@@ -128,14 +128,14 @@ int main()
 	MotorInit(&motor);
 	
 	// This initializes the PDControl task, including setting
-	// up CTC timer 0. Since it talks to the motor, we pass it
+	// up CTC timer 3. Since it talks to the motor, we pass it
 	// the address of the Motor structure.
 	//
 	PDControl pdControl;
 	PDControlInit(&pdControl, &motor, PDCONTROLLER_PERIOD_MSEC);
 	
 	// This initializes the Trajectory task, including setting
-	// up CTC timer 3. Since it talks to the PDController, we
+	// up CTC timer 0. Since it talks to the PDController, we
 	// pass it the address of the PDControl structure.
 	//
 	Trajectory trajectory;

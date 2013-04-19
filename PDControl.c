@@ -39,14 +39,16 @@ bool EqualTorqueCalc(const TorqueCalc* tcp1, const TorqueCalc* tcp2)
 		;
 }
 
-// This initializes the PDControl structure and initializes CTC timer 0.
+// This initializes the PDControl structure and initializes CTC timer 3.
 // The PDControlTask function will be called by the interrupt handler
-// for timer 0, and the PDControl* will be passed to it.
+// for timer 3, and the PDControl* will be passed to it.
 //
 void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec)
 {
 	pdc->m_enabled = false;
 	pdc->m_targetAngleSet = false;
+	pdc->m_period = 0;
+	pdc->m_maxAccel = 1;
 	pdc->m_ready = false;
 	pdc->m_lastAngle = 0;
 	pdc->m_targetAngle = 0;
@@ -57,7 +59,30 @@ void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec)
 	pdc->m_calcIndex = 0;
 	TorqueCalcInit(&pdc->m_calc);
 	
-	setup_CTC_timer0(periodMSec, PDControlTask, pdc);
+	PDControlSetPeriod(pdc, periodMSec);
+}
+
+void PDControlSetPeriod(PDControl* pdc, uint16_t periodMSec)
+{
+	BEGIN_ATOMIC
+		pdc->m_period = periodMSec;
+		setup_CTC_timer3(periodMSec, PDControlTask, pdc);
+	END_ATOMIC
+}
+
+uint16_t PDControlGetPeriod(PDControl* pdc)
+{
+	return pdc->m_period;
+}
+
+void PDControlSetMaxAccel(PDControl* pdc, uint8_t maxAccel)
+{
+	pdc->m_maxAccel = maxAccel;
+}
+
+uint8_t PDControlGetMaxAccel(PDControl* pdc)
+{
+	return pdc->m_maxAccel;
 }
 
 // Set the Kp value for the torque calculation function.
@@ -128,9 +153,8 @@ bool PDControlIsEnabled(PDControl* pdc)
 }
 
 #define MAX_ERROR 1 // what is considered "close enough"
-#define MAX_DELTA_TORQUE (MOTOR_MAX_TORQUE / 8) // limits acceleration
 
-// This is called from the timer0 interrupt vector. This *is* the
+// This is called from the timer 3 interrupt vector. This *is* the
 // PDController task.
 //
 // The new torque is calculated based on the formula
@@ -184,13 +208,14 @@ void PDControlTask(void* arg)
 				torque = pdc->m_kp * errorAngle - pdc->m_kd * pdc->m_calc.m_velocity;
 				pdc->m_calc.m_torqueCalculated = torque;
 				
+				MotorTorque maxDeltaTorque = MOTOR_MAX_TORQUE / pdc->m_maxAccel;
 				pdc->m_calc.m_torqueChangeTooHigh = true; // assume the worse, fix below if ok
-				int16_t minTorque = lastTorque - MAX_DELTA_TORQUE;
+				int16_t minTorque = lastTorque - maxDeltaTorque;
 				if (torque < minTorque)
 					torque = minTorque; // acceleration too high, limit it
 				else
 				{
-					int16_t maxTorque = lastTorque + MAX_DELTA_TORQUE;
+					int16_t maxTorque = lastTorque + maxDeltaTorque;
 					if (torque > maxTorque)
 						torque = maxTorque; // acceleration too high, limit it
 					else
