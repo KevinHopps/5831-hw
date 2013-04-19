@@ -31,10 +31,24 @@ void CIORegisterCommand(CommandIO* ciop, const char* name, CmdFunc func)
 
 int CIOIndex(CommandIO* ciop, const char* name)
 {
+	int numFound = 0;
+	int found = -1;
+	int nameLen = strlen(name);
+	
 	int i = ciop->m_nfuncs;
-	while (--i >= 0 && strncmp(name, ciop->m_cmd[i].m_name, strlen(name)) != 0)
-		continue;
-	return i;
+	while (--i >= 0)
+	{
+		if (strncmp(name, ciop->m_cmd[i].m_name, nameLen) == 0)
+		{
+			found = i;
+			++numFound;
+		}
+	}
+	
+	if (numFound != 1)
+		found = -1;
+		
+	return found;
 }
 
 bool CIOLookup(CommandIO* ciop, const char* name)

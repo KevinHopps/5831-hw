@@ -58,3 +58,21 @@ bool matchIgnoreCase(const char* s1, const char* s2, int maxLen)
 
 	return match;
 }
+
+bool getInterruptsEnabled()
+{
+	uint8_t sreg = SREG;
+	uint8_t bit = 1 << SREG_I;
+	uint8_t result = sreg & bit;
+	return result;
+}
+
+bool setInterruptsEnabled(bool enable)
+{
+	bool result = getInterruptsEnabled();
+	if (enable)
+		sei();
+	else
+		cli();
+	return result;
+}

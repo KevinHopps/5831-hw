@@ -1,118 +1,242 @@
 #include <pololu/orangutan.h>
+#include <stdio.h>
+#include "kdebug.h"
 #include "kserial.h"
 #include "kutils.h"
 #include "PDControl.h"
+#include "kmotor.h"
 
-void PDControlInit(PDControl* pdc, Motor* motor)
+void TorqueCalcInit(TorqueCalc* tcp)
 {
-	pdc->m_enabled = false;
-	pdc->m_readiness = 0;
-	pdc->m_lastAngle = 0;
-	pdc->m_targetAngle = 0;
-	pdc->m_kp = 0.005;
-	pdc->m_kd = 0.05;
-	pdc->m_lastMSec = 0;
-	pdc->m_motor = motor;
+	tcp->m_Pr = 0;
+	tcp->m_Pm = 0;
+	tcp->m_Kp = 0.0;
+	tcp->m_Kd = 0.0;
+	tcp->m_velocity = 0.0;
+	tcp->m_torqueCalculated = 0;
+	tcp->m_torqueUsed = 0;
+	tcp->m_torqueChangeTooHigh = false;
+	tcp->m_torqueMagnitudeTooHigh = false;
+	tcp->m_torqueMagnitudeTooLow = false;
 }
 
+bool EqualTorqueCalc(const TorqueCalc* tcp1, const TorqueCalc* tcp2)
+{
+	return true
+		&& tcp1->m_Pr == tcp2->m_Pr
+		&& tcp1->m_Pm == tcp2->m_Pm
+		&& tcp1->m_Kp == tcp2->m_Kp
+		&& tcp1->m_Kd == tcp2->m_Kd
+		&& tcp1->m_velocity == tcp2->m_velocity
+		&& tcp1->m_torqueCalculated == tcp2->m_torqueCalculated
+		&& tcp1->m_torqueUsed == tcp2->m_torqueUsed
+		&& tcp1->m_torqueChangeTooHigh == tcp2->m_torqueChangeTooHigh
+		&& tcp1->m_torqueMagnitudeTooHigh == tcp2->m_torqueMagnitudeTooHigh
+		&& tcp1->m_torqueMagnitudeTooLow == tcp2->m_torqueMagnitudeTooLow
+		;
+}
+
+// This initializes the PDControl structure and initializes CTC timer 0.
+// The PDControlTask function will be called by the interrupt handler
+// for timer 0, and the PDControl* will be passed to it.
+//
+void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec)
+{
+	pdc->m_enabled = false;
+	pdc->m_targetAngleSet = false;
+	pdc->m_ready = false;
+	pdc->m_lastAngle = 0;
+	pdc->m_targetAngle = 0;
+	pdc->m_kp = 6;
+	pdc->m_kd = -6;
+	pdc->m_lastMSec = 0;
+	pdc->m_motor = motor;
+	pdc->m_calcIndex = 0;
+	TorqueCalcInit(&pdc->m_calc);
+	
+	setup_CTC_timer0(periodMSec, PDControlTask, pdc);
+}
+
+// Set the Kp value for the torque calculation function.
+//
 void PDControlSetKp(PDControl* pdc, float kp)
 {
 	pdc->m_kp = kp;
 }
 
+// Get the Kp value used in the torque calculation function.
+//
 float PDControlGetKp(PDControl* pdc)
 {
 	return pdc->m_kp;
 }
 
+// Set the Kd value for the torque calculation function.
+//
 void PDControlSetKd(PDControl* pdc, float kd)
 {
 	pdc->m_kd = kd;
 }
 
+// Get the Kd value used in the torque calculation function.
+//
 float PDControlGetKd(PDControl* pdc)
 {
 	return pdc->m_kd;
 }
 
-void PDControlRotate(PDControl* pdc, int16_t angle)
+// This sets the target angle for the PDControl task.
+// The PDControl task will notice the change and adapt.
+//
+void PDControlSetTargetAngle(PDControl* pdc, MotorAngle angle)
 {
-	pdc->m_targetAngle = MotorGetCurrentAngle(pdc->m_motor) + angle;
+	pdc->m_targetAngle = angle;
+	pdc->m_targetAngleSet = true;
 }
 
-int16_t PDControlGetCurrentAngle(PDControl* pdc)
+// This returns the current motor position.
+//
+MotorAngle PDControlGetCurrentAngle(PDControl* pdc)
 {
 	return MotorGetCurrentAngle(pdc->m_motor);
 }
 
-#define MAX_ERROR (1)
-#define MAX_DELTA_TORQUE (1.0)
-
-void taskPDControl(void* arg)
+// This resets the current motor position, treating
+// the current location as zero.
+//
+void PDControlResetCurrentAngle(PDControl* pdc)
 {
-	PDControl* pdc = (PDControl*)arg;
-	
-	if (!pdc->m_enabled)
-		return;
-		
-	int16_t currentAngle = PDControlGetCurrentAngle(pdc);
-	uint32_t now = get_ms();
-	
-	if (pdc->m_readiness < 1)
-		++pdc->m_readiness;
-	else
-	{
-		float lastTorque = MotorGetTorque(pdc->m_motor);
-		int16_t errorAngle = pdc->m_targetAngle - currentAngle;
-		int16_t deltaAngle = currentAngle - pdc->m_lastAngle;
-		float elapsed = now - pdc->m_lastMSec;
-		if (elapsed > 0.0)
-		{
-			if (ABS(errorAngle) > MAX_ERROR)
-			{
-				float velocity = deltaAngle / elapsed;
-				if (pdc->m_readiness < 2)
-					++pdc->m_readiness;
-				else
-				{
-					float torque = pdc->m_kp * errorAngle - pdc->m_kd * velocity;
-					if (torque < lastTorque - MAX_DELTA_TORQUE)
-						torque = lastTorque - MAX_DELTA_TORQUE;
-					else
-					{
-						if (torque > lastTorque + MAX_DELTA_TORQUE)
-							torque = lastTorque + MAX_DELTA_TORQUE;
-					}
-					
-					if (-MOTOR_MIN_TORQUE < torque && torque < MOTOR_MIN_TORQUE)
-					{
-						if (torque < 0.0)
-							torque = -MOTOR_MIN_TORQUE;
-						else if (torque > 0.0)
-							torque = MOTOR_MIN_TORQUE;
-					}
-					
-					s_println("setting torque=%s", s_ftos(torque, 2));
-					MotorSetTorque(pdc->m_motor, torque);
-				}
-			}
-		}
-	}
-	
-	pdc->m_lastMSec = now;
-	pdc->m_lastAngle = currentAngle;
+	MotorResetCurrentAngle(pdc->m_motor);
 }
 
 void PDControlSetEnabled(PDControl* pdc, bool enabled)
 {
 	if (pdc->m_enabled != enabled)
 	{
-		pdc->m_readiness = 0;
 		pdc->m_enabled = enabled;
+		pdc->m_ready = false;
+		pdc->m_targetAngleSet = false;
 	}
 }
 
 bool PDControlIsEnabled(PDControl* pdc)
 {
 	return pdc->m_enabled;
+}
+
+#define MAX_ERROR 1
+#define MAX_DELTA_TORQUE (MOTOR_MAX_TORQUE / 2)
+
+// This is called from the timer0 interrupt vector. This *is* the
+// PDController task.
+//
+// The new torque is calculated based on the formula
+//     t = Kp*errorAngle + Kd*velocity
+//
+// Now errorAngle is the difference between the current angle and
+// the target angle, and velocity is the rate of change of the angle.
+//
+// Because of the component of velocity, we must measure the change
+// in angle since the last time this function was called, and calculate
+// the elapsed time. Because of this, we cannot calculate velocity the
+// first time this function is called. The m_ready flag is used for
+// this.
+//
+void PDControlTask(void* arg)
+{
+	PDControl* pdc = (PDControl*)arg;
+	
+	if (!pdc->m_enabled)
+		return;
+		
+	MotorAngle currentAngle = MotorGetCurrentAngle(pdc->m_motor);
+	uint32_t currentMSec = get_ms();
+	
+	if (!pdc->m_ready)
+		pdc->m_ready = true;
+	else if (pdc->m_targetAngleSet)
+	{
+		int16_t lastTorque = MotorGetTorque(pdc->m_motor);
+		MotorAngle errorAngle = pdc->m_targetAngle - currentAngle;
+		MotorAngle deltaAngle = currentAngle - pdc->m_lastAngle;
+		uint32_t elapsed = currentMSec - pdc->m_lastMSec;
+		if (elapsed > 0)
+		{
+			++pdc->m_calcIndex;
+			TorqueCalcInit(&pdc->m_calc);
+			
+			pdc->m_calc.m_Pr = pdc->m_targetAngle;
+			pdc->m_calc.m_Pm = currentAngle;
+			pdc->m_calc.m_Kp = pdc->m_kp;
+			pdc->m_calc.m_Kd = pdc->m_kd;
+		
+			int32_t torque = 0;
+			
+			if (ABS(errorAngle) > MAX_ERROR)
+			{
+				pdc->m_calc.m_velocity = (float)deltaAngle / (float)elapsed;
+				torque = pdc->m_kp * errorAngle - pdc->m_kd * pdc->m_calc.m_velocity;
+				pdc->m_calc.m_torqueCalculated = torque;
+				
+				pdc->m_calc.m_torqueChangeTooHigh = true;
+				int16_t minTorque = lastTorque - MAX_DELTA_TORQUE;
+				if (torque < minTorque)
+					torque = minTorque;
+				else
+				{
+					int16_t maxTorque = lastTorque + MAX_DELTA_TORQUE;
+					if (torque > maxTorque)
+						torque = maxTorque;
+					else
+						pdc->m_calc.m_torqueChangeTooHigh = false;
+				}
+				
+				// If the torque magnitude is too small to produce movement,
+				// set the torque magnitude to the minimum that does move.
+				//
+				if (-MOTOR_MIN_TORQUE < torque && torque < MOTOR_MIN_TORQUE)
+				{
+					pdc->m_calc.m_torqueMagnitudeTooLow = true;
+					if (torque < 0)
+						torque = -MOTOR_MIN_TORQUE;
+					else if (torque > 0)
+						torque = MOTOR_MIN_TORQUE;
+					else
+						pdc->m_calc.m_torqueMagnitudeTooLow = false;
+				}
+			}
+
+			pdc->m_calc.m_torqueMagnitudeTooHigh = true;
+			if (torque < -MOTOR_MAX_TORQUE)
+				torque = -MOTOR_MAX_TORQUE;
+			else if (torque > MOTOR_MAX_TORQUE)
+				torque = MOTOR_MAX_TORQUE;
+			else
+				pdc->m_calc.m_torqueMagnitudeTooHigh = false;
+			
+			static int32_t lastTorque;
+			if (lastTorque != torque)
+			{
+				lastTorque = torque;
+				dbg_println("index=%ld, T=%ld", pdc->m_calcIndex, torque);
+			}
+			pdc->m_calc.m_torqueUsed = (int16_t)torque;
+			MotorSetTorque(pdc->m_motor, (int16_t)torque);
+		}
+	}
+	
+	pdc->m_lastMSec = currentMSec;
+	pdc->m_lastAngle = currentAngle;
+}
+
+uint32_t PDControlGetTorqueCalc(PDControl* pdc, TorqueCalc* tcp)
+{
+	uint32_t result = 0;
+	
+	BEGIN_ATOMIC
+		*tcp = pdc->m_calc;
+		result = pdc->m_calcIndex;
+	END_ATOMIC
+	
+	return result;
 }

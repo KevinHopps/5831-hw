@@ -8,7 +8,7 @@ AVRDUDE_DEVICE ?= m168
 
 OPTIMIZE ?= -Os
 CF ?= $(OPTIMIZE)
-CFLAGS=-g -Wall -mcall-prologues -mmcu=$(MCU) $(DEVICE_SPECIFIC_CFLAGS) $(CF)
+CFLAGS=-g -Wall -mcall-prologues -mmcu=$(MCU) $(DEVICE_SPECIFIC_CFLAGS) $(CF) -DUSE_FLOATS=1 -Werror
 CC=avr-gcc
 OBJ2HEX=avr-objcopy 
 LDFLAGS=-Wl,-gc-sections -lpololu_$(DEVICE) -Wl,-relax -lc

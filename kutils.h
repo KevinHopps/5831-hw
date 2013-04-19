@@ -20,4 +20,10 @@ bool matchIgnoreCase(const char* s1, const char* s2, int maxLen);
 #define ABS(X) ((X) < 0 ? -(X) : (X))
 #define SGN(X) ((X) < 0 ? -1 : ((X) > 0 ? 1 : 0))
 
+bool getInterruptsEnabled();
+bool setInterruptsEnabled(bool enable); // returns old status
+
+#define BEGIN_ATOMIC do { bool XXenabledXX_ = setInterruptsEnabled(false);
+#define END_ATOMIC setInterruptsEnabled(XXenabledXX_); } while (false);
+
 #endif // #ifndef _kutils_h_

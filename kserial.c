@@ -19,19 +19,32 @@ void s_write(const char* buf, int len)
 	empty_sendbuf();
 }
 
-int s_printf(const char* fmt, ...)
+static int s_printPlus(const char* extra, const char* fmt, va_list ap)
 {
 	char buf[256];
+	char* bp = buf;
+	
+	bp += vsprintf(bp, fmt, ap);
+	KASSERT(bp < buf + sizeof(buf));
+	
+	char c;
+	while ((c = *extra++) != 0)
+		*bp++ = c;
+		
+	int result = bp - buf;
+	s_write(buf, result);
+	
+	return result;
+}
 
+int s_printf(const char* fmt, ...)
+{
 	va_list ap;
 	va_start(ap, fmt);
 
-	int result = vsprintf(buf, fmt, ap);
-	KASSERT(result < sizeof(buf));
+	int result = s_printPlus("", fmt, ap);
 
 	va_end(ap);
-
-	s_write(buf, result);
 
 	return result;
 }
@@ -40,25 +53,12 @@ const char s_eol[] = "\r\n";
 
 int s_println(const char* fmt, ...)
 {
-	char buf[256];
-
 	va_list ap;
 	va_start(ap, fmt);
 
-	char* bp = buf;
-	bp += vsprintf(buf, fmt, ap);
-
-	KASSERT(bp-buf+2 < sizeof(buf));
+	int result = s_printPlus(s_eol, fmt, ap);
 
 	va_end(ap);
-
-	const char* cp = s_eol;
-	while ((*bp++ = *cp++) != 0)
-		continue;
-
-	int result = bp - buf;
-
-	s_write(buf, result);
 
 	return result;
 }
@@ -113,6 +113,8 @@ int s_read(char* buf, int want, int msecTimeout)
 	return got;
 }
 
+#if USE_FLOATS
+
 char* s_ftosbp(char** bpp, double f, int places)
 {
 	char* bp = *bpp;
@@ -159,3 +161,5 @@ int s_printflt(double f, int places)
 	char buf[32];
 	return s_printf("%s", s_ftosb(buf, f, places));
 }
+
+#endif // #if USE_FLOATS

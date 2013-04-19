@@ -17,10 +17,17 @@ void s_write(const char* buf, int len);
 int s_read(char* buf, int want, int msecTimeout);
 
 int s_printf(const char* fmt, ...);
+int dbg_printf(const char* fmt, ...);
 
 extern const char s_eol[];
 
 int s_println(const char* fmt, ...); // s_printf plus s_eol
+
+#ifndef USE_FLOATS
+#define USE_FLOATS 0
+#endif
+
+#if USE_FLOATS
 
 // Because %f does not seem to work, here are alternatives for printing floats.
 // The will print as though you had specified %.*f, places.
@@ -29,5 +36,7 @@ char* s_ftosbp(char** buf, double f, int places); // e.g. char buf[16]; char* bp
 char* s_ftosb(char* buf, double f, int places); // e.g. char buf[16]; s_println("x=%s", s_ftosb(buf, x));
 char* s_ftos(double f, int places); // a non-reentrant version that uses a static buffer
 int s_printflt(double f, int places);
+
+#endif
 
 #endif // #ifndef _kserial_h_

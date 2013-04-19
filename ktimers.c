@@ -26,11 +26,12 @@
 #define WGM2_PWM_PHASE_CORRECT_TOP_FF 1 // TOP=0xff
 #define WGM2_PWM_PHASE_CORRECT_TOP_OCRA 5 // TOP=OCRA
 
-typedef struct CallbackInfo_
+typedef struct CallbackInfo_ CallbackInfo;
+struct CallbackInfo_
 {
 	Callback m_func;
 	void* m_arg;
-} CallbackInfo;
+};
 
 CallbackInfo timer0CallbackInfo;
 CallbackInfo timer3CallbackInfo;
@@ -42,53 +43,52 @@ static const int kPrescaleFrequency[] = { 0, 1, 8, 64, 256, 1024 };
 static const int kMaxPrescaleIndex = sizeof(kPrescaleFrequency) / sizeof(*kPrescaleFrequency) - 1;
 static const uint32_t kClockFrequency = 20L * 1000L * 1000L;
 
+typedef struct TimerSetup_ TimerSetup;
 struct TimerSetup_
 {
 	uint8_t m_cs;
 	uint16_t m_top;
 };
-typedef struct TimerSetup_ TimerSetup;
 
-static TimerSetup calcTimerSetup(uint16_t msecPeriod, uint16_t maxTop)
+static uint16_t calcTimerSetup(TimerSetup* tsp, uint16_t msecPeriod, uint16_t maxTop)
 {
-	TimerSetup result = { 0, 0 };
-
 	uint32_t ltop = 0;
-	result.m_cs = kMinPrescaleIndex;
+	tsp->m_cs = kMinPrescaleIndex;
 	int done = 0;
 	uint32_t periodTimesClockFreq = msecPeriod * (kClockFrequency / 1000);
 	while (!done)
 	{
-		int prescale = kPrescaleFrequency[result.m_cs];
+		int prescale = kPrescaleFrequency[tsp->m_cs];
 		ltop = periodTimesClockFreq / prescale;
-		if (result.m_cs >= kMaxPrescaleIndex || ltop <= maxTop)
+		if (tsp->m_cs >= kMaxPrescaleIndex || ltop <= maxTop)
 			done = 1;
 		else
-			++result.m_cs;
+			++tsp->m_cs;
 	}
 
-	result.m_top = (int)ltop;
+	KASSERT(ltop <= maxTop);
 	
-	KASSERT(result.m_top <= maxTop);
+	tsp->m_top = (int)ltop;
 
-	int derivedPeriod = (1000L * result.m_top * kPrescaleFrequency[result.m_cs]) / kClockFrequency;
+	uint16_t derivedPeriod = (1000L * tsp->m_top * kPrescaleFrequency[tsp->m_cs]) / kClockFrequency;
 	s_println("calcTimerSetup: msecPeriod=%d, (1000L * top=%u * prescale[%d]=%d / kClockFrequency) = %d",
-		msecPeriod, result.m_top, result.m_cs, kPrescaleFrequency[result.m_cs], derivedPeriod);
+		msecPeriod, tsp->m_top, tsp->m_cs, kPrescaleFrequency[tsp->m_cs], derivedPeriod);
 
-	return result;
+	return derivedPeriod;
 }
 
 void setup_CTC_timer0(uint16_t msecPeriod, Callback func, void* arg)
 {
-	TimerSetup ts = { 0, 0 };
+	uint16_t derivedPeriod = 0;
+	TimerSetup ts;
 
 	if (msecPeriod > 0)
 	{
 		uint16_t maxTop = 0xff; // timer0 uses 8-bit registers
-		ts = calcTimerSetup(msecPeriod, maxTop);
+		derivedPeriod = calcTimerSetup(&ts, msecPeriod, maxTop);
 	}
 
-	s_println("setup_CTC_timer0: cs=%d, top=%u", ts.m_cs, ts.m_top);
+	s_println("setup_CTC_timer0: cs=%d, top=%u, derivedPeriod=%u", ts.m_cs, ts.m_top, derivedPeriod);
 
 	int com0a = 0;
 	int com0b = 0;
@@ -122,7 +122,7 @@ void set_bits(uint8_t* lvalue, int highest, int lowest, int value)
 	*lvalue = (*lvalue & ~mask) | value;
 }
 
-void setup_PWM_timer2(float dutyCycle)
+void setup_PWM_timer2(uint8_t dutyCycle)
 {
 	int useA = 0;
 	int useB = 1;
@@ -144,7 +144,7 @@ void setup_PWM_timer2(float dutyCycle)
 	TCCR2A = tccr2a;
 	TCCR2B = tccr2b;
 	
-	uint8_t matchCount = (uint8_t)(255 * dutyCycle + 0.5);
+	uint8_t matchCount = dutyCycle;
 	OCR2A = 0;
 	OCR2B = 0;
 	if (useA)
@@ -157,19 +157,21 @@ void setup_PWM_timer2(float dutyCycle)
 
 void setup_CTC_timer3(uint16_t msecPeriod, Callback func, void* arg)
 {
-	TimerSetup ts = {0, 0};
+	uint16_t derivedPeriod = 0;
+	TimerSetup ts;
 	int com0a = 0; // 0 for "normal" mode
 	int com0b = 0; // 0 for "normal" mode
 	int wgm = 4; // OCR3 for TOP
 	int icnc = 0; // input capture noise canceller
 	int ices = 0; // image capture edge select
-	unsigned maxTop = 0xffff; // timer3 uses 16-bit registers
 
 	if (msecPeriod > 0)
 	{
-		ts = calcTimerSetup(msecPeriod, maxTop);
-		s_println("setup_CTC_timer3 cs=%d, top=%u", ts.m_cs, ts.m_top);
+		uint16_t maxTop = 0xffff; // timer3 uses 16-bit registers
+		derivedPeriod = calcTimerSetup(&ts, msecPeriod, maxTop);
 	}
+
+	s_println("setup_CTC_timer3 cs=%d, top=%u, derivedPeriod=%u", ts.m_cs, ts.m_top, derivedPeriod);
 
 	int a = ((com0a & 3) << 6) | ((com0b & 3) << 4) | (wgm & 3);
 	int b = ((icnc & 1) << 7) | ((ices & 1) << 6) | (((wgm >> 2) & 3) << 3) | (ts.m_cs & 7);

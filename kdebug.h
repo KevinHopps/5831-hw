@@ -8,4 +8,8 @@ extern void beep();
 
 #define KASSERT(X) do { if (!(X)) die(#X); } while(0)
 
+int dbg_printf(const char* fmt, ...); // appends to a debug buffer
+int dbg_println(const char* fmt, ...); // appends to a debug buffer
+void dbg_flush(); // prints debug buffer
+
 #endif // #ifndef _kdebug_h_

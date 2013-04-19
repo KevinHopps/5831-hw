@@ -3,6 +3,7 @@
 #include "kmotor.h"
 #include "kserial.h"
 #include "ktimers.h"
+#include "kutils.h"
 
 #define PWM_TIMER_DDR DDRD
 #define PWM_TIMER_BIT (1 << 6)
@@ -19,7 +20,11 @@
 #define ENCODER_DEGREES_PER_TICK (360.0 / ENCODER_TICKS_PER_REVOLUTION) // 2.82
 #define ENCODER_MAX_REVOLUTIONS_PER_SECOND (100.0 / 54.63) // by experiment, 1.83
 #define ENCODER_MAX_DEGREES_PER_SECOND (ENCODER_MAX_REVOLUTIONS_PER_SECOND * 360.0) // 658.98
-#define MIN_TORQUE (0.04) // min torque that makes motor turn
+
+// The discussion below was written when motor torque was implemented
+// as a float in the range [-1.0,1.0]. Now it is an int16_t and the
+// range is [-1000,1000].
+//
 // At half speed (setting torque=0.5), the revolutions per second was
 // 70/66.02 and 70/64.69, or an average of 1.07 RPS.
 // With torque=0.25, we get 30/57.94, 30/57.66, or 0.52 RPS
@@ -54,6 +59,9 @@ static void initMotorHW()
 	gEncoderError = 0;
 }
 
+// This interrupt handler is triggered by motor encoder changes. There
+// are two encoders that cause this interrupt handler to fire.
+//
 ISR(PCINT3_vect)
 {
 	uint8_t x = ENCODER_PIN;
@@ -87,52 +95,60 @@ static void setMotorDirection(bool forward)
 
 void MotorInit(Motor* motor)
 {
-	motor->m_torque = 0.0;
+	motor->m_torque = 0;
 	
 	initMotorHW();
 	
-	MotorSetTorque(motor, 0.0);
+	MotorSetTorque(motor, 0);
 }
 
-void MotorSetTorque(Motor* motor, float torque)
+void MotorSetTorque(Motor* motor, int16_t torque)
 {
-	s_println("MotorSetTorque %s", s_ftos(torque, 2));
-	
-	if (torque < -1.0)
-		torque = -1.0;
-	else if (torque > 1.0)
-		torque = 1.0;
+	if (torque < -MOTOR_MAX_TORQUE)
+		torque = -MOTOR_MAX_TORQUE;
+	else if (torque > MOTOR_MAX_TORQUE)
+		torque = MOTOR_MAX_TORQUE;
 		
 	if (motor->m_torque != torque)
 	{
+		motor->m_torque = torque;
+		
 		bool forward = true;
-		if (torque < 0.0)
+		if (torque < 0)
 		{
 			forward = false;
 			torque = -torque;
 		}
 
-		setup_PWM_timer2(0.0);
+		setup_PWM_timer2(0);
 		delay_ms(1);		
 		setMotorDirection(forward);
-		setup_PWM_timer2(torque);
-
-		motor->m_torque = torque;
+		uint8_t dutyCycle = (255L * torque) / 1000;
+		setup_PWM_timer2(dutyCycle);
 	}
 }
 
-float MotorGetTorque(Motor* motor)
+int16_t MotorGetTorque(Motor* motor)
 {
 	return motor->m_torque;
 }
 
-int16_t MotorGetCurrentAngle(Motor* motor)
+MotorAngle MotorGetCurrentAngle(Motor* motor)
 {
-	cli();
-	int32_t count = gEncoderCount; // This takes two instructions
-	sei();
+	int32_t count = 0;
 	
-	int16_t result = 360 * count / ENCODER_TICKS_PER_REVOLUTION;
+	BEGIN_ATOMIC
+		count = gEncoderCount; // This takes two instructions
+	END_ATOMIC
+	
+	MotorAngle result = 360 * count / ENCODER_TICKS_PER_REVOLUTION;
 	
 	return result;
+}
+
+void MotorResetCurrentAngle(Motor* motor)
+{
+	BEGIN_ATOMIC
+		gEncoderCount = 0;
+	END_ATOMIC
 }
