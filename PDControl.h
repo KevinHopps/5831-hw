@@ -48,33 +48,32 @@ struct PDControl_
 	TorqueCalc m_calc; // record of last torque calculation
 };
 
-// This initializes the PDControl structure and its task. The
-// periodMSec specifies the period of this task.
+// This initializes the PDControl structure and its task.
 //
-void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec);
+void PDControlInit(PDControl* pdc, Motor* motor);
 
 // Adjust the period of the PDControl task
 //
-uint16_t PDControlGetPeriod(PDControl* pdc);
+uint16_t PDControlGetPeriod(const PDControl* pdc);
 void PDControlSetPeriod(PDControl* pdc, uint16_t periodMSec);
 
 // Adjust the max acceleration factor. So that the max delta
 // torque is MOTOR_MAX_TORQUE/maxAccel
 //
-uint8_t PDControlGetMaxAccel(PDControl* pdc);
+uint8_t PDControlGetMaxAccel(const PDControl* pdc);
 void PDControlSetMaxAccel(PDControl* pdc, uint8_t maxAccel);
 
 // These get/set the Kp parameter, used in the formula
 //     t = Kp*errorPosition + Kd*velocity
 //
 void PDControlSetKp(PDControl* pdc, float kp);
-float PDControlGetKp(PDControl* pdc);
+float PDControlGetKp(const PDControl* pdc);
 
 // These get/set the Kd parameter, used in the formula
 //     t = Kp*errorPosition + Kd*velocity
 //
 void PDControlSetKd(PDControl* pdc, float kd);
-float PDControlGetKd(PDControl* pdc);
+float PDControlGetKd(const PDControl* pdc);
 
 // This sets the target angle for the PDControl task.
 //
@@ -82,7 +81,7 @@ void PDControlSetTargetAngle(PDControl* pdc, MotorAngle angle);
 
 // This gets the current motor position.
 //
-MotorAngle PDControlGetCurrentAngle(PDControl* pdc);
+MotorAngle PDControlGetCurrentAngle(const PDControl* pdc);
 
 // This resets the current motor position, treating
 // the current location as zero.
@@ -94,7 +93,7 @@ void PDControlResetCurrentAngle(PDControl* pdc);
 // determines whether the handler will actually do anything.
 //
 void PDControlSetEnabled(PDControl* pdc, bool enabled);
-bool PDControlIsEnabled(PDControl* pdc);
+bool PDControlGetEnabled(const PDControl* pdc);
 
 // This is the PDController task, which is called
 // from the interrupt handler. The arg parameter is a void*
@@ -104,6 +103,6 @@ bool PDControlIsEnabled(PDControl* pdc);
 //
 void PDControlTask(void* arg);
 
-uint32_t PDControlGetTorqueCalc(PDControl* pdc, TorqueCalc* tcp); // returns an update index
+uint32_t PDControlGetTorqueCalc(const PDControl* pdc, TorqueCalc* tcp); // returns an update index
 
 #endif // #ifndef _pdCtrl_h_

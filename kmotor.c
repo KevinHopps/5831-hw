@@ -128,12 +128,12 @@ void MotorSetTorque(Motor* motor, MotorTorque torque)
 	}
 }
 
-MotorTorque MotorGetTorque(Motor* motor)
+MotorTorque MotorGetTorque(const Motor* motor)
 {
 	return motor->m_torque;
 }
 
-MotorAngle MotorGetCurrentAngle(Motor* motor)
+MotorAngle MotorGetCurrentAngle(const Motor* motor)
 {
 	int32_t count = 0;
 	

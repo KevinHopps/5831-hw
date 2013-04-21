@@ -24,14 +24,14 @@ void TrajectorySetTargetAngle(Trajectory* tp, MotorAngle angle)
 	tp->m_targetAngle = angle;
 }
 
-MotorAngle TrajectoryGetTargetAngle(Trajectory* tp)
+MotorAngle TrajectoryGetTargetAngle(const Trajectory* tp)
 {
 	return tp->m_targetAngle;
 }
 
 // This returns the current motor position.
 //
-MotorAngle TrajectoryGetCurrentAngle(Trajectory* tp)
+MotorAngle TrajectoryGetCurrentAngle(const Trajectory* tp)
 {
 	return PDControlGetCurrentAngle(tp->m_pdc);
 }
@@ -46,7 +46,7 @@ void TrajectorySetEnabled(Trajectory* tp, bool enabled)
 
 // This returns true if the Trajectory Interpolator task is enabled.
 //
-bool TrajectoryIsEnabled(Trajectory* tp)
+bool TrajectoryGetEnabled(const Trajectory* tp)
 {
 	return tp->m_enabled;
 }

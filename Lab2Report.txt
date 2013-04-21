@@ -1,8 +1,113 @@
 1. Experiment with the speed of the motor: Run your motor at full speed. Modify your gains to achieve position control at that speed (as best you can). Slow the motor down as much as possible. Modify your gains to acheive position control. Repeat with one or two speeds in between. For each, record the approximate speed in rotations per second, record your equation (gains), and report on the behavior of the system and your ability to control the position.
 
+My program allows dynamic setting of the period of the PDControl task. At 1 KHz, a period of 1 msec, the speed is not interesting because it is always measured as 0. You recommended checking the speed only sometimes during the task, but doing it this way means that you are setting new torque every 1 msec but using a speed that was determined in the past. I opted instead to modify the period of the PDControl task. I experimented with this period, and a 100 msec there is significant overshoot in positioning, but at 10 msec the positioning is clean, and there is a measurable velocity. So I went with 10 msec.
+
 My torque calculation uses the formula as given, with some additional modifications
 	T = Kp*(Pr-Pm) + Kd*Vm
-I limit the change in torque from the previous iteration
+Modification 1: I limit the change in torque from the previous iteration.
+Modification 2: If the computed torque is too small to produce movement, but the target position is not yet reached, the minimum torque is applied.
+
+With Kp=10 and Kd=-20, a rotation of 18000 degrees (18000/360=50 revolutions) takes 28.8 seconds, including the slight ramp-up and ramp-down time. This is 50/28.8=1.74 revolutions/sec. There is a slight overshoot with the gain this high.
+
+This compares with setting the motor torque directly (ignoring the control tasks) and measuring the top speed at 100.0/54.63=1.83 revolutions/sec.
+
+The minimum torque that reliably produces motion is 4.5% of full on. The speed at that setting is 2/37.8=0.053 revolutions/sec. This can be achieved by setting Kp=Kd=0 and relying on the modifications I stated above, that the minimum torque is applied.
+
+Here is sample output with Kp=10, Kd=-20, performing a rotation of 360 degrees. Note that my torque is specified in a range of [-1000,1000].
+Pr=180, Pm=0, T=250, TC=1800, 10.00*180 + -20.00*0.00, rapid acc, exceeds max
+Pr=180, Pm=0, T=500, TC=1800, 10.00*180 + -20.00*0.00, rapid acc, exceeds max
+Pr=185, Pm=5, T=750, TC=1800, 10.00*180 + -20.00*0.00, rapid acc, exceeds max
+Pr=196, Pm=16, T=1000, TC=1840, 10.00*180 + -20.00*2.00, exceeds max
+Pr=210, Pm=33, T=1000, TC=1870, 10.00*177 + -20.00*5.00, exceeds max
+Pr=225, Pm=50, T=1000, TC=1850, 10.00*175 + -20.00*5.00, exceeds max
+Pr=241, Pm=67, T=1000, TC=1860, 10.00*174 + -20.00*6.00, exceeds max
+Pr=264, Pm=90, T=1000, TC=1860, 10.00*174 + -20.00*6.00, exceeds max
+Pr=284, Pm=106, T=1000, TC=1880, 10.00*178 + -20.00*5.00, exceeds max
+Pr=300, Pm=123, T=1000, TC=1870, 10.00*177 + -20.00*5.00, exceeds max
+Pr=317, Pm=143, T=1000, TC=1860, 10.00*174 + -20.00*6.00, exceeds max
+Pr=337, Pm=160, T=1000, TC=1890, 10.00*177 + -20.00*6.00, exceeds max
+Pr=360, Pm=182, T=1000, TC=1880, 10.00*178 + -20.00*5.00, exceeds max
+Pr=360, Pm=194, T=1000, TC=1780, 10.00*166 + -20.00*6.00, exceeds max
+Pr=360, Pm=219, T=1000, TC=1530, 10.00*141 + -20.00*6.00, exceeds max
+Pr=360, Pm=236, T=1000, TC=1360, 10.00*124 + -20.00*6.00, exceeds max
+Pr=360, Pm=255, T=1000, TC=1150, 10.00*105 + -20.00*5.00, exceeds max
+Pr=360, Pm=272, T=980
+Pr=360, Pm=295, T=770
+Pr=360, Pm=317, T=530
+Pr=360, Pm=337, T=350
+Pr=360, Pm=354, T=120
+Pr=360, Pm=362, T=45, TC=20, 10.00*-2 + -20.00*2.00, no movement
+Pr=360, Pm=371, T=-50
+Pr=360, Pm=374, T=-140
+Pr=360, Pm=371, T=-170
+Pr=360, Pm=368, T=-80
+Pr=360, Pm=365, T=-50
+Pr=360, Pm=362, T=-45, TC=-20, 10.00*-2 + -20.00*0.00, no movement
+Pr=360, Pm=360, T=0
+
+As you can see, Pr starts out at 180 and gradually moves to 360. That is because the trajectory interpolator gives PDControl a max delta of 180. You can see the effect of limiting the acceleration in the first few iterations. The calculated torque (given as TC), is larger than the max, and the change from zero can be at most 1/4 of 1000, or 250. That is why the torque used, T, goes from 0, to 250, to 500, to 750, and finally to 1000. Once the torque reaches 1000, it maxes out, despite the formula producing larger calculations. As we near the target of 360, the torque drops, but you can see that it overshoots to a maximum of 374 degrees. You also see that twice the computed torque was too small to produce motion, and so the minimum (45) was used.
+
+Testing various values for Kd seem to make little difference. Here are the results with Kd=-5.
+Pr=180, Pm=0, T=250, TC=1800, 10.00*180 + -5.00*0.00, rapid acc, exceeds max
+Pr=182, Pm=2, T=500, TC=1800, 10.00*180 + -5.00*0.00, rapid acc, exceeds max
+Pr=188, Pm=8, T=750, TC=1815, 10.00*180 + -5.00*3.00, rapid acc, exceeds max
+Pr=196, Pm=19, T=1000, TC=1785, 10.00*177 + -5.00*3.00, exceeds max
+Pr=213, Pm=36, T=1000, TC=1785, 10.00*177 + -5.00*3.00, exceeds max
+Pr=230, Pm=50, T=1000, TC=1815, 10.00*180 + -5.00*3.00, exceeds max
+Pr=244, Pm=67, T=1000, TC=1800, 10.00*177 + -5.00*6.00, exceeds max
+Pr=267, Pm=92, T=1000, TC=1775, 10.00*175 + -5.00*5.00, exceeds max
+Pr=286, Pm=109, T=1000, TC=1795, 10.00*177 + -5.00*5.00, exceeds max
+Pr=303, Pm=126, T=1000, TC=1800, 10.00*177 + -5.00*6.00, exceeds max
+Pr=320, Pm=143, T=1000, TC=1800, 10.00*177 + -5.00*6.00, exceeds max
+Pr=337, Pm=160, T=1000, TC=1800, 10.00*177 + -5.00*6.00, exceeds max
+Pr=360, Pm=185, T=1000, TC=1775, 10.00*175 + -5.00*5.00, exceeds max
+Pr=360, Pm=202, T=1000, TC=1610, 10.00*158 + -5.00*6.00, exceeds max
+Pr=360, Pm=219, T=1000, TC=1440, 10.00*141 + -5.00*6.00, exceeds max
+Pr=360, Pm=233, T=1000, TC=1300, 10.00*127 + -5.00*6.00, exceeds max
+Pr=360, Pm=250, T=1000, TC=1130, 10.00*110 + -5.00*6.00, exceeds max
+Pr=360, Pm=272, T=905
+Pr=360, Pm=289, T=735
+Pr=360, Pm=315, T=495
+Pr=360, Pm=334, T=285
+Pr=360, Pm=348, T=135
+Pr=360, Pm=360, T=0
+Pr=360, Pm=365, T=-45, TC=-35, 10.00*-5 + -5.00*3.00, no movement
+Pr=360, Pm=365, T=-50
+Pr=360, Pm=362, T=-45, TC=-20, 10.00*-2 + -5.00*0.00, no movement
+Pr=360, Pm=360, T=0
+
+You can see that the overshoot is slightly smaller with Kd=-5.
+
+Experimenting with various values shows that a value of Kp=6 and Kd=-6 produce very smooth results:
+Pr=180, Pm=0, T=250, TC=1080, 6.00*180 + -6.00*0.00, rapid acc, exceeds max
+Pr=182, Pm=2, T=500, TC=1080, 6.00*180 + -6.00*0.00, rapid acc, exceeds max
+Pr=188, Pm=11, T=750, TC=1080, 6.00*177 + -6.00*3.00, rapid acc, exceeds max
+Pr=196, Pm=22, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=213, Pm=36, T=1000, TC=1080, 6.00*177 + -6.00*3.00, exceeds max
+Pr=227, Pm=53, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=244, Pm=70, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=261, Pm=87, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=278, Pm=104, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=295, Pm=120, T=1000, TC=1080, 6.00*175 + -6.00*5.00, exceeds max
+Pr=320, Pm=146, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=337, Pm=163, T=1000, TC=1080, 6.00*174 + -6.00*6.00, exceeds max
+Pr=357, Pm=180, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
+Pr=360, Pm=199, T=996
+Pr=360, Pm=222, T=864
+Pr=360, Pm=244, T=726
+Pr=360, Pm=267, T=594
+Pr=360, Pm=284, T=492
+Pr=360, Pm=303, T=372
+Pr=360, Pm=317, T=270
+Pr=360, Pm=329, T=186
+Pr=360, Pm=340, T=138
+Pr=360, Pm=345, T=102
+Pr=360, Pm=348, T=72
+Pr=360, Pm=351, T=54
+Pr=360, Pm=354, T=45, TC=36, 6.00*6 + -6.00*0.00, no movement
+Pr=360, Pm=357, T=45, TC=18, 6.00*3 + -6.00*0.00, no movement
+Pr=360, Pm=360, T=0
+You can see that there is no overshoot.
 
 2. Change the step size to something very large (more than 2pi), and try a reference position of 4pi+current_position. How does system behavior differ from your tuned step size? Try tuning your controller for that very large step size. What happens if you then set the reference position to be very close to the current position (within a few degrees)? 
 

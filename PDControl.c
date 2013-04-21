@@ -43,7 +43,7 @@ bool EqualTorqueCalc(const TorqueCalc* tcp1, const TorqueCalc* tcp2)
 // The PDControlTask function will be called by the interrupt handler
 // for timer 3, and the PDControl* will be passed to it.
 //
-void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec)
+void PDControlInit(PDControl* pdc, Motor* motor)
 {
 	pdc->m_enabled = false;
 	pdc->m_targetAngleSet = false;
@@ -52,13 +52,14 @@ void PDControlInit(PDControl* pdc, Motor* motor, uint16_t periodMSec)
 	pdc->m_ready = false;
 	pdc->m_lastAngle = 0;
 	pdc->m_targetAngle = 0;
-	pdc->m_kp = 6;
+	pdc->m_kp = 8;
 	pdc->m_kd = -6;
 	pdc->m_lastMSec = 0;
 	pdc->m_motor = motor;
 	pdc->m_calcIndex = 0;
 	TorqueCalcInit(&pdc->m_calc);
 	
+	uint16_t periodMSec = 10; // default period
 	PDControlSetPeriod(pdc, periodMSec);
 }
 
@@ -66,11 +67,11 @@ void PDControlSetPeriod(PDControl* pdc, uint16_t periodMSec)
 {
 	BEGIN_ATOMIC
 		pdc->m_period = periodMSec;
-		setup_CTC_timer3(periodMSec, PDControlTask, pdc);
+		setup_CTC_timer3(pdc->m_period, PDControlTask, pdc);
 	END_ATOMIC
 }
 
-uint16_t PDControlGetPeriod(PDControl* pdc)
+uint16_t PDControlGetPeriod(const PDControl* pdc)
 {
 	return pdc->m_period;
 }
@@ -80,7 +81,7 @@ void PDControlSetMaxAccel(PDControl* pdc, uint8_t maxAccel)
 	pdc->m_maxAccel = maxAccel;
 }
 
-uint8_t PDControlGetMaxAccel(PDControl* pdc)
+uint8_t PDControlGetMaxAccel(const PDControl* pdc)
 {
 	return pdc->m_maxAccel;
 }
@@ -94,7 +95,7 @@ void PDControlSetKp(PDControl* pdc, float kp)
 
 // Get the Kp value used in the torque calculation function.
 //
-float PDControlGetKp(PDControl* pdc)
+float PDControlGetKp(const PDControl* pdc)
 {
 	return pdc->m_kp;
 }
@@ -108,7 +109,7 @@ void PDControlSetKd(PDControl* pdc, float kd)
 
 // Get the Kd value used in the torque calculation function.
 //
-float PDControlGetKd(PDControl* pdc)
+float PDControlGetKd(const PDControl* pdc)
 {
 	return pdc->m_kd;
 }
@@ -124,7 +125,7 @@ void PDControlSetTargetAngle(PDControl* pdc, MotorAngle angle)
 
 // This returns the current motor position.
 //
-MotorAngle PDControlGetCurrentAngle(PDControl* pdc)
+MotorAngle PDControlGetCurrentAngle(const PDControl* pdc)
 {
 	return MotorGetCurrentAngle(pdc->m_motor);
 }
@@ -147,7 +148,7 @@ void PDControlSetEnabled(PDControl* pdc, bool enabled)
 	}
 }
 
-bool PDControlIsEnabled(PDControl* pdc)
+bool PDControlGetEnabled(const PDControl* pdc)
 {
 	return pdc->m_enabled;
 }
@@ -207,6 +208,14 @@ void PDControlTask(void* arg)
 				pdc->m_calc.m_velocity = (float)deltaAngle / (float)elapsed;
 				torque = pdc->m_kp * errorAngle - pdc->m_kd * pdc->m_calc.m_velocity;
 				pdc->m_calc.m_torqueCalculated = torque;
+
+				pdc->m_calc.m_torqueMagnitudeTooHigh = true; // assume the worst, fix below if ok
+				if (torque < -MOTOR_MAX_TORQUE)
+					torque = -MOTOR_MAX_TORQUE;
+				else if (torque > MOTOR_MAX_TORQUE)
+					torque = MOTOR_MAX_TORQUE;
+				else
+					pdc->m_calc.m_torqueMagnitudeTooHigh = false; // magnitude ok after all
 				
 				MotorTorque maxDeltaTorque = MOTOR_MAX_TORQUE / pdc->m_maxAccel;
 				pdc->m_calc.m_torqueChangeTooHigh = true; // assume the worse, fix below if ok
@@ -228,22 +237,14 @@ void PDControlTask(void* arg)
 				if (-MOTOR_MIN_TORQUE < torque && torque < MOTOR_MIN_TORQUE)
 				{
 					pdc->m_calc.m_torqueMagnitudeTooLow = true; // assume the worse, fix below if ok
-					if (torque < 0)
+					if (torque < 0 || (torque == 0 && errorAngle < 0))
 						torque = -MOTOR_MIN_TORQUE;
-					else if (torque > 0)
+					else if (torque > 0 || (torque == 0 && errorAngle > 0))
 						torque = MOTOR_MIN_TORQUE;
 					else
 						pdc->m_calc.m_torqueMagnitudeTooLow = false; // magnitude ok after all
 				}
 			}
-
-			pdc->m_calc.m_torqueMagnitudeTooHigh = true; // assume the worst, fix below if ok
-			if (torque < -MOTOR_MAX_TORQUE)
-				torque = -MOTOR_MAX_TORQUE;
-			else if (torque > MOTOR_MAX_TORQUE)
-				torque = MOTOR_MAX_TORQUE;
-			else
-				pdc->m_calc.m_torqueMagnitudeTooHigh = false; // magnitude ok after all
 			
 			pdc->m_calc.m_torqueUsed = (int16_t)torque;
 			MotorSetTorque(pdc->m_motor, (int16_t)torque);
@@ -256,7 +257,7 @@ void PDControlTask(void* arg)
 
 // Return the last torque calculation performed.
 //
-uint32_t PDControlGetTorqueCalc(PDControl* pdc, TorqueCalc* tcp)
+uint32_t PDControlGetTorqueCalc(const PDControl* pdc, TorqueCalc* tcp)
 {
 	uint32_t result = 0;
 	

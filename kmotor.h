@@ -28,9 +28,9 @@ struct Motor_
 void MotorInit(Motor* motor);
 
 void MotorSetTorque(Motor* motor, MotorTorque torque); // [-1000,1000]
-MotorTorque MotorGetTorque(Motor* motor);
+MotorTorque MotorGetTorque(const Motor* motor);
 
-MotorAngle MotorGetCurrentAngle(Motor* motor);
+MotorAngle MotorGetCurrentAngle(const Motor* motor);
 void MotorResetCurrentAngle(Motor* motor); // redefine current angle as zero
 
 #endif // #ifndef _kmotor_h_

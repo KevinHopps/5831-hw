@@ -67,7 +67,9 @@ void ConsoleTask(CommandIO* ciop)
 			
 			// Minimally, we print out Pr, Pm, and T
 			//
-			s_printf("Pr=%ld, Pm=%ld, T=%d", tc.m_Pr, tc.m_Pm, tc.m_torqueUsed);
+			if (ctx->m_counter++ == 0)
+				s_println("");
+			s_printf("%3d Pr=%ld, Pm=%ld, T=%d", ctx->m_counter, tc.m_Pr, tc.m_Pm, tc.m_torqueUsed);
 			if (tc.m_torqueUsed != tc.m_torqueCalculated)
 			{
 				// Sometimes the calculation generates a torque that is
@@ -111,7 +113,6 @@ void ConsoleTask(CommandIO* ciop)
 	}
 }
 
-#define PDCONTROLLER_PERIOD_MSEC 100 // max 3355
 #define TRAJECTORY_PERIOD_MSEC 10 // max 13
 
 int main()
@@ -132,7 +133,7 @@ int main()
 	// the address of the Motor structure.
 	//
 	PDControl pdControl;
-	PDControlInit(&pdControl, &motor, PDCONTROLLER_PERIOD_MSEC);
+	PDControlInit(&pdControl, &motor);
 	
 	// This initializes the Trajectory task, including setting
 	// up CTC timer 0. Since it talks to the PDController, we
@@ -157,9 +158,16 @@ int main()
 	CIOReset(&cio, &commandContext);
 	InitCommands(&cio);
 	
+	ContextSetLogging(&commandContext, true); // logging on by default
+	ContextSetPeriod(&commandContext, 10); // default msec period for PDControl
+	ContextSetKp(&commandContext, 6.0); // default Kp
+	ContextSetKd(&commandContext, -6.0); // default Kd
+	ContextSetTasksRunning(&commandContext, true); // start Trajectory Interpolator and PDControl
+	ContextSetMaxAccel(&commandContext, 4); // max acceleration is 1/4 top speed
+	
 	// Print a welcome message and a hint at how to get help.
 	//
-	s_println("Type 'go' to enable Trajectory and PDControl");
+	showInfo(&commandContext);
 	s_println("Type '?' for help");
 
 	// We're all set, turn on the interrupt handlers. This enables
@@ -167,7 +175,7 @@ int main()
 	// respective interrupt handlers. But those tasks will not do
 	// anything until the "go" command is received.
 	//
-	setInterruptsEnabled	(true);
+	setInterruptsEnabled(true);
 	
 	while (true)
 	{

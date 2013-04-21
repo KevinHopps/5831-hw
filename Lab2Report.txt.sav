@@ -1,0 +1,19 @@
+1. Experiment with the speed of the motor: Run your motor at full speed. Modify your gains to achieve position control at that speed (as best you can). Slow the motor down as much as possible. Modify your gains to acheive position control. Repeat with one or two speeds in between. For each, record the approximate speed in rotations per second, record your equation (gains), and report on the behavior of the system and your ability to control the position.
+
+My torque calculation uses the formula as given, with some additional modifications
+	T = Kp*(Pr-Pm) + Kd*Vm
+I limit the change in torque from the previous iteration by a user-settable factor. So, if the calculated torque requires a larger change than is allowed, the maximum allowable change is what is used. In addition, if the calculated torque is smaller than the one I experimentally determined is the lower limit that produces motion, I use that torque instead.
+
+So, to do what you are asking in this question, I need to remove the acceleration limiting so that the only effect on the torque calculation is from the Kp and Kd gains.
+
+If I set Kp to 20 and rotate 360, I see the motor spin immediately to top speed and stop quickly after one revolution, after having to reverse slightly because it did not stop soon enough.
+
+At 1 KHz, the Kd factor is not very interesting, because the velocity is always calculated as zero. This is due to the fact that the encoder count has not changed in 1 ms.
+
+With Kp=1
+
+2. Change the step size to something very large (more than 2pi), and try a reference position of 4pi+current_position. How does system behavior differ from your tuned step size? Try tuning your controller for that very large step size. What happens if you then set the reference position to be very close to the current position (within a few degrees)? 
+
+3. Using your optimally tuned values for the PD controller running at 1kHz, graph Pm, Pr and T while executing the trajectory: rotate the motor forward 360 degrees, hold for .5 seconds, then rotate backwards for 360 degrees, hold for .5 seconds, rotate forwards for 5 degrees. Be sure to graph the entire trajectory. 
+
+4. Run your PD controller at 50Hz and 5Hz while graphing the same variables. Discuss the results.

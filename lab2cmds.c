@@ -6,6 +6,7 @@
 void ContextInit(Context* ctx, Trajectory* tp, PDControl* pdc, Motor* mp)
 {
 	ctx->m_logging = false;
+	ctx->m_counter = 0;
 	ctx->m_tp = tp;
 	ctx->m_pdc = pdc;
 	ctx->m_motor = mp;
@@ -74,7 +75,7 @@ static void showHint(bool* shown)
 	}
 }
 
-static void showHelp()
+void showHelp()
 {
 	static const char* help[] =
 	{
@@ -113,14 +114,26 @@ int help_cmd(int argc, char** argv, void* context)
 	return 0;
 }
 
-static void showInfo(Context* ctx)
+void showInfo(Context* ctx)
 {
 	s_println("torque %d", MotorGetTorque(ctx->m_motor));
-	s_println("angle%ld", (long)MotorGetCurrentAngle(ctx->m_motor));
+	s_println("angle %ld", (long)MotorGetCurrentAngle(ctx->m_motor));
 	s_println("kp %s", s_ftos(PDControlGetKp(ctx->m_pdc), 5));
 	s_println("kd %s", s_ftos(PDControlGetKd(ctx->m_pdc), 5));
 	s_println("acceleration %d", PDControlGetMaxAccel(ctx->m_pdc));
 	s_println("period %d", PDControlGetPeriod(ctx->m_pdc));
+}
+
+bool ContextGetLogging(const Context* ctx)
+{
+	return ctx->m_logging;
+}
+
+bool ContextSetLogging(Context* ctx, bool enabled)
+{
+	bool result = ctx->m_logging;
+	ctx->m_logging = enabled;
+	return result;
 }
 
 int L_cmd(int argc, char** argv, void* context)
@@ -129,10 +142,22 @@ int L_cmd(int argc, char** argv, void* context)
 	showHint(&hintShown);
 	
 	Context* ctx = (Context*)context;
-	ctx->m_logging = !ctx->m_logging;
+	ContextSetLogging(ctx, !ContextGetLogging(ctx));
 	s_println("Logging is %s", ctx->m_logging ? "on" : "off");
 
 	return 0;
+}
+
+float ContextGetKp(const Context* ctx)
+{
+	return PDControlGetKp(ctx->m_pdc);
+}
+
+float ContextSetKp(Context* ctx, float kp)
+{
+	float result = PDControlGetKp(ctx->m_pdc);
+	PDControlSetKp(ctx->m_pdc, kp);
+	return result;
 }
 
 int kp_cmd(int argc, char** argv, void* context)
@@ -141,11 +166,23 @@ int kp_cmd(int argc, char** argv, void* context)
 		showHelp();
 		
 	Context* ctx = (Context*)context;
-	PDControlSetKp(ctx->m_pdc, atof(argv[1]));
+	ContextSetKp(ctx, atof(argv[1]));
 	
 	showInfo(ctx);
 	
 	return 0;
+}
+
+float ContextGetKd(const Context* ctx)
+{
+	return PDControlGetKd(ctx->m_pdc);
+}
+
+float ContextSetKd(Context* ctx, float kd)
+{
+	float result = PDControlGetKd(ctx->m_pdc);
+	PDControlSetKd(ctx->m_pdc, kd);
+	return result;
 }
 
 int kd_cmd(int argc, char** argv, void* context)
@@ -154,7 +191,7 @@ int kd_cmd(int argc, char** argv, void* context)
 		showHelp();
 		
 	Context* ctx = (Context*)context;
-	PDControlSetKd(ctx->m_pdc, atof(argv[1]));
+	ContextSetKd(ctx, atof(argv[1]));
 	
 	showInfo(ctx);
 	
@@ -170,6 +207,18 @@ int info_cmd(int argc, char** argv, void* context)
 	return 0;
 }
 
+uint8_t ContextGetMaxAccel(const Context* ctx)
+{
+	return PDControlGetMaxAccel(ctx->m_pdc);
+}
+
+uint8_t ContextSetMaxAccel(Context* ctx, uint8_t maxAccel)
+{
+	uint8_t result = PDControlGetMaxAccel(ctx->m_pdc);
+	PDControlSetMaxAccel(ctx->m_pdc, maxAccel);
+	return result;
+}
+
 int acceleration_cmd(int argc, char** argv, void* context)
 {
 	if (argc != 2)
@@ -178,9 +227,21 @@ int acceleration_cmd(int argc, char** argv, void* context)
 	int16_t factor = atoi(argv[1]);
 	Context* ctx = (Context*)context;
 	
-	PDControlSetMaxAccel(ctx->m_pdc, factor);
+	ContextSetMaxAccel(ctx, factor);
 	
 	return 0;
+}
+
+MotorTorque ContextGetTorque(const Context* ctx)
+{
+	return MotorGetTorque(ctx->m_motor);
+}
+
+MotorTorque ContextSetTorque(Context* ctx, MotorTorque torque)
+{
+	MotorTorque result = MotorGetTorque(ctx->m_motor);
+	MotorSetTorque(ctx->m_motor, torque);
+	return result;
 }
 
 int torque_cmd(int argc, char** argv, void* context)
@@ -188,14 +249,27 @@ int torque_cmd(int argc, char** argv, void* context)
 	if (argc != 2)
 		showHelp();
 		
-	int16_t torque = atoi(argv[1]);
+	MotorTorque torque = atoi(argv[1]);
 	Context* ctx = (Context*)context;
 	
-	MotorSetTorque(ctx->m_motor, torque);
+	ContextSetTorque(ctx, torque);
 	
 	showInfo(ctx);
 	
 	return 0;
+}
+
+MotorAngle ContextGetTargetAngle(const Context* ctx)
+{
+	return TrajectoryGetTargetAngle(ctx->m_tp);
+}
+
+MotorAngle ContextSetTargetAngle(Context* ctx, MotorAngle target)
+{
+	MotorAngle result = TrajectoryGetTargetAngle(ctx->m_tp);
+	TrajectorySetTargetAngle(ctx->m_tp, target);
+	ctx->m_counter = 0;
+	return result;
 }
 
 int rotate_cmd(int argc, char** argv, void* context)
@@ -207,9 +281,21 @@ int rotate_cmd(int argc, char** argv, void* context)
 	Context* ctx = (Context*)context;
 	
 	MotorAngle target = TrajectoryGetCurrentAngle(ctx->m_tp) + rotation;
-	TrajectorySetTargetAngle(ctx->m_tp, target);
+	ContextSetTargetAngle(ctx, target);
 	
 	return 0;
+}
+
+uint16_t ContextGetPeriod(const Context* ctx)
+{
+	return PDControlGetPeriod(ctx->m_pdc);
+}
+
+uint16_t ContextSetPeriod(Context* ctx, uint16_t periodMSec)
+{
+	uint16_t result = PDControlGetPeriod(ctx->m_pdc);
+	PDControlSetPeriod(ctx->m_pdc, periodMSec);
+	return result;
 }
 
 int period_cmd(int argc, char** argv, void* context)
@@ -227,9 +313,19 @@ int period_cmd(int argc, char** argv, void* context)
 		result = 1;
 	}
 	else
-		PDControlSetPeriod(ctx->m_pdc, period);
+		ContextSetPeriod(ctx, period);
 	
 	return result;
+}
+
+void ContextReset(Context* ctx)
+{
+	PDControlSetEnabled(ctx->m_pdc, false);
+	TrajectorySetEnabled(ctx->m_tp, false);
+	MotorSetTorque(ctx->m_motor, 0);
+	MotorResetCurrentAngle(ctx->m_motor);
+	TrajectorySetTargetAngle(ctx->m_tp, 0);
+	PDControlSetTargetAngle(ctx->m_pdc, 0);
 }
 
 int zero_cmd(int argc, char** argv, void* context)
@@ -239,23 +335,34 @@ int zero_cmd(int argc, char** argv, void* context)
 		
 	Context* ctx = (Context*)context;
 	
-	PDControlSetEnabled(ctx->m_pdc, false);
-	TrajectorySetEnabled(ctx->m_tp, false);
-	MotorSetTorque(ctx->m_motor, 0);
-	MotorResetCurrentAngle(ctx->m_motor);
+	ContextReset(ctx);
 	
 	showInfo(ctx);
 	
 	return 0;
 }
 
+bool ContextGetTasksRunning(const Context* ctx)
+{
+	bool result = TrajectoryGetEnabled(ctx->m_tp);
+	PDControlSetEnabled(ctx->m_pdc, result);
+	return result;
+}
+
+bool ContextSetTasksRunning(Context* ctx, bool shouldRun)
+{
+	bool result = ContextGetTasksRunning(ctx);
+	PDControlSetEnabled(ctx->m_pdc, shouldRun);
+	TrajectorySetEnabled(ctx->m_tp, shouldRun);
+	return result;
+}
+
 int go_cmd(int argc, char** argv, void* context)
 {
 	Context* ctx = (Context*)context;
 
-	PDControlSetEnabled(ctx->m_pdc, true);
-	TrajectorySetEnabled(ctx->m_tp, true);
-
+	ContextSetTasksRunning(ctx, true);
+	
 	return 0;
 }
 
@@ -263,8 +370,7 @@ int stop_cmd(int argc, char** argv, void* context)
 {
 	Context* ctx = (Context*)context;
 
-	PDControlSetEnabled(ctx->m_pdc, false);
-	TrajectorySetEnabled(ctx->m_tp, false);
+	ContextSetTasksRunning(ctx, false);
 
 	return 0;
 }

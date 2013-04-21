@@ -22,18 +22,18 @@ void TrajectoryInit(Trajectory* tp, PDControl* pdc, uint16_t msecPeriod);
 // necessary.
 //
 void TrajectorySetTargetAngle(Trajectory* tp, MotorAngle angle);
-MotorAngle TrajectoryGetTargetAngle(Trajectory* tp);
+MotorAngle TrajectoryGetTargetAngle(const Trajectory* tp);
 
 // This returns the current angle of the motor.
 //
-MotorAngle TrajectoryGetCurrentAngle(Trajectory* tp);
+MotorAngle TrajectoryGetCurrentAngle(const Trajectory* tp);
 
 // This enables or disables the Trajectory Interpolator task.
 // The interrupt handler will continue to fire, but this
 // determines whether the handler will actually do anything.
 //
 void TrajectorySetEnabled(Trajectory* tp, bool enabled);
-bool TrajectoryIsEnabled(Trajectory* tp);
+bool TrajectoryGetEnabled(const Trajectory* tp);
 
 // This is the Trajectory Interpolator task, which is called
 // from the interrupt handler. The arg parameter is a void*
