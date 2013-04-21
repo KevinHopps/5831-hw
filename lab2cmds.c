@@ -6,6 +6,7 @@
 void ContextInit(Context* ctx, Trajectory* tp, PDControl* pdc, Motor* mp)
 {
 	ctx->m_logging = false;
+	ctx->m_runningProgram = false;
 	ctx->m_counter = 0;
 	ctx->m_tp = tp;
 	ctx->m_pdc = pdc;
@@ -47,6 +48,7 @@ int period_cmd(int argc, char** argv, void* context);
 int zero_cmd(int argc, char** argv, void* context);
 int go_cmd(int argc, char** argv, void* context);
 int stop_cmd(int argc, char** argv, void* context);
+int xprog_cmd(int argc, char** argv, void* context);
 
 void InitCommands(CommandIO* ciop)
 {
@@ -64,6 +66,7 @@ void InitCommands(CommandIO* ciop)
 	CIORegisterCommand(ciop, "zero", zero_cmd);
 	CIORegisterCommand(ciop, "go", go_cmd);
 	CIORegisterCommand(ciop, "stop", stop_cmd);
+	CIORegisterCommand(ciop, "xprog", xprog_cmd);
 }
 
 static void showHint(bool* shown)
@@ -100,6 +103,7 @@ void showHelp()
 		"    zero {stop motor, handlers, set angle to 0}",
 		"    go",
 		"    stop",
+		"    xprog {run the canned program}",
 		0 // sentinel
 	};
 	
@@ -272,6 +276,11 @@ MotorAngle ContextSetTargetAngle(Context* ctx, MotorAngle target)
 	return result;
 }
 
+MotorAngle ContextGetCurrentAngle(const Context* ctx)
+{
+	return MotorGetCurrentAngle(ctx->m_motor);
+}
+
 int rotate_cmd(int argc, char** argv, void* context)
 {
 	if (argc != 2)
@@ -320,12 +329,10 @@ int period_cmd(int argc, char** argv, void* context)
 
 void ContextReset(Context* ctx)
 {
-	PDControlSetEnabled(ctx->m_pdc, false);
-	TrajectorySetEnabled(ctx->m_tp, false);
-	MotorSetTorque(ctx->m_motor, 0);
-	MotorResetCurrentAngle(ctx->m_motor);
 	TrajectorySetTargetAngle(ctx->m_tp, 0);
 	PDControlSetTargetAngle(ctx->m_pdc, 0);
+	MotorSetTorque(ctx->m_motor, 0);
+	MotorResetCurrentAngle(ctx->m_motor);
 }
 
 int zero_cmd(int argc, char** argv, void* context)
@@ -371,6 +378,15 @@ int stop_cmd(int argc, char** argv, void* context)
 	Context* ctx = (Context*)context;
 
 	ContextSetTasksRunning(ctx, false);
+
+	return 0;
+}
+
+int xprog_cmd(int argc, char** argv, void* context)
+{
+	Context* ctx = (Context*)context;
+
+	ctx->m_runningProgram = true;
 
 	return 0;
 }

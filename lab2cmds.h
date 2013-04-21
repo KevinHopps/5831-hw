@@ -12,6 +12,7 @@ typedef struct Context_ Context;
 struct Context_
 {
 	bool m_logging;
+	bool m_runningProgram;
 	uint16_t m_counter;
 	Trajectory* m_tp;
 	PDControl* m_pdc;
@@ -25,6 +26,7 @@ uint16_t ContextGetPeriod(const Context* ctx);
 uint16_t ContextSetPeriod(Context* ctx, uint16_t periodMSec);
 MotorAngle ContextSetTargetAngle(Context* ctx, MotorAngle target);
 MotorAngle ContextGetTargetAngle(const Context* ctx);
+MotorAngle ContextGetCurrentAngle(const Context* ctx);
 MotorTorque ContextSetTorque(Context* ctx, MotorTorque torque);
 MotorTorque ContextGetTorque(const Context* ctx);
 uint8_t ContextSetMaxAccel(Context* ctx, uint8_t maxAccel);

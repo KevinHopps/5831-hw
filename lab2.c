@@ -35,12 +35,142 @@
 
 void setLED(int16_t pin, uint8_t state); // state: 0=OFF, 0xff=TOGGLE, else=ON
 
+typedef enum State_ State;
+enum State_
+{
+	READY,
+	MOVING_TO_360,
+	FIRST_DELAY,
+	MOVING_TO_0,
+	SECOND_DELAY,
+	MOVING_TO_5,
+	DONE
+};
+
+#define PRINT_DELAY 10 // msec delay for print outs
+
+State ProgramTask(CommandIO* ciop)
+{
+	static State state = READY;
+	static uint32_t startTime;
+	static uint32_t delayBegin;
+	static uint32_t lastPrint;
+	
+	return DONE; // debug, for now
+	
+	Context* ctx = (Context*)ciop->m_context;
+	ctx->m_logging = false;
+	MotorAngle angle;
+	
+	bool doPrint = false;
+	uint32_t now = get_ms();
+	if (state == READY)
+	{
+		startTime = now;
+		lastPrint = now;
+		doPrint = true;
+	}
+	uint32_t elapsed = now - startTime;
+	
+	if (now - lastPrint >= PRINT_DELAY)
+	{
+		lastPrint = now;
+		doPrint = true;
+	}
+	
+	switch (state)
+	{
+	case READY:
+		s_println("");
+		s_println("%4ld begin", elapsed);
+		lastPrint = now;
+		ContextSetTargetAngle(ctx, 360);
+		state = MOVING_TO_360;
+		break;
+	
+	case MOVING_TO_360:
+		angle = ContextGetCurrentAngle(ctx);
+		
+		if (doPrint)
+			s_println("%4ld angle %d", elapsed, angle);
+			
+		if (angle == 360)
+		{
+			state = FIRST_DELAY;
+			delayBegin = now;
+		}
+		break;
+		
+	case FIRST_DELAY:
+		if (doPrint)
+			s_println("%4ld sleep %ldms", elapsed, 500-(now-delayBegin));
+		if (now - delayBegin >= 500)
+		{
+			ContextSetTargetAngle(ctx, 0);
+			state = MOVING_TO_0;
+		}
+		break;
+		
+	case MOVING_TO_0:
+		angle = ContextGetCurrentAngle(ctx);
+		
+		if (doPrint)
+			s_println("%4ld angle %d", elapsed, angle);
+			
+		if (angle == 0)
+		{
+			state = SECOND_DELAY;
+			delayBegin = now;
+		}
+		break;
+		
+	case SECOND_DELAY:
+		if (doPrint)
+			s_println("%4ld sleep %ldms", elapsed, 500-(now-delayBegin));
+		if (now - delayBegin >= 500)
+		{
+			ContextSetTargetAngle(ctx, 5);
+			state = MOVING_TO_5;
+		}
+		break;
+		
+	case MOVING_TO_5:
+		angle = ContextGetCurrentAngle(ctx);
+		
+		if (doPrint)
+			s_println("%4ld angle %d", elapsed, angle);
+			
+		if (angle == 0)
+		{
+			state = DONE;
+			delayBegin = now;
+			s_println("%4ld done", elapsed);
+		}
+		break;
+		
+	default:
+		break;
+	}
+	
+	return state;
+}
+
 // This is the user interface task. It is invoked from the main
 // loop when no interrupt handlers (higher priority tasks) are
 // running.
 //
 void ConsoleTask(CommandIO* ciop)
 {
+	Context* ctx = (Context*)ciop->m_context;
+	
+	if (ctx->m_runningProgram)
+	{
+		if (ProgramTask(ciop) == DONE)
+			ctx->m_runningProgram = false;
+		if (ctx->m_runningProgram)
+			return;
+	}
+	
 	// CIOCheckForCommand polls serial input and returns true
 	// when the user has entered a valid command. Then
 	// CIORunCommand() is invoked to run the command.
@@ -53,7 +183,6 @@ void ConsoleTask(CommandIO* ciop)
 	// of the last one reported, so that we only issue a report
 	// if the values are different.
 	//
-	Context* ctx = (Context*)ciop->m_context;
 	if (ctx->m_logging)
 	{
 		static TorqueCalc lastTorqueCalc; // last one reported
@@ -176,6 +305,8 @@ int main()
 	// anything until the "go" command is received.
 	//
 	setInterruptsEnabled(true);
+	
+	time_reset();
 	
 	while (true)
 	{

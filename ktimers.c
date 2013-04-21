@@ -188,12 +188,15 @@ void setup_CTC_timer3(uint16_t msecPeriod, Callback func, void* arg)
 	TCCR3B = b;
 
 	OCR3A = ts.m_top;
+	
+	s_println("TCCR3A=0x%02x, TCCR3B=0x%02x, top=%d, cs=%d", a, b, ts.m_top, ts.m_cs);
 
 	uint8_t icie3 = 0;
 	uint8_t ocie3b = 0;
 	uint8_t ocie3a = (msecPeriod > 0); // enable Timer/Counter3 Output Compare A Match uint8_terrupt
 	uint8_t toie3 = 0;
 	a = ((icie3 & 1) << 5) | ((ocie3b & 1) << 2) | ((ocie3a & 1) << 1) | (toie3 & 1);
+	s_println("TIMSK3=0x%02x", a);
 	TIMSK3 = a;
 
 	timer3CallbackInfo.m_func = func;
