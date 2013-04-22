@@ -48,9 +48,10 @@ void PDControlInit(PDControl* pdc, Motor* motor)
 {
 	pdc->m_enabled = false;
 	pdc->m_targetAngleSet = false;
+	pdc->m_ready = false;
+	pdc->m_idle = true;
 	pdc->m_period = 0;
 	pdc->m_maxAccel = 1;
-	pdc->m_ready = false;
 	pdc->m_lastAngle = 0;
 	pdc->m_targetAngle = 0;
 	pdc->m_kp = 8;
@@ -122,6 +123,7 @@ void PDControlSetTargetAngle(PDControl* pdc, MotorAngle angle)
 {
 	pdc->m_targetAngle = angle;
 	pdc->m_targetAngleSet = true;
+	pdc->m_idle = false;
 }
 
 // This returns the current motor position.
@@ -180,6 +182,7 @@ void PDControlTask(void* arg)
 		
 	MotorAngle currentAngle = MotorGetCurrentAngle(pdc->m_motor);
 	uint32_t currentMSec = getMSec();
+	pdc->m_idle = false;
 	
 	if (!pdc->m_ready)
 		pdc->m_ready = true;
@@ -204,7 +207,9 @@ void PDControlTask(void* arg)
 		
 			int32_t torque = 0;
 			
-			if (ABS(errorAngle) > MAX_ERROR)
+			if (ABS(errorAngle) <= MAX_ERROR)
+				pdc->m_idle = true;
+			else
 			{
 				pdc->m_calc.m_velocity = (float)deltaAngle / (float)elapsed;
 				torque = pdc->m_kp * errorAngle + pdc->m_kd * pdc->m_calc.m_velocity;

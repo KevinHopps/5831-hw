@@ -48,7 +48,6 @@ enum State_
 };
 
 #define PRINT_DELAY 500 // msec delay for print outs
-#define SETTLE_TIME 10
 
 State ProgramTask(CommandIO* ciop, State state)
 {
@@ -74,6 +73,7 @@ State ProgramTask(CommandIO* ciop, State state)
 		doPrint = true;
 	}
 	uint32_t elapsed = now - startTime;
+	bool arrived = false;
 	
 	if (now - lastPrint >= PRINT_DELAY)
 	{
@@ -94,25 +94,14 @@ State ProgramTask(CommandIO* ciop, State state)
 	
 	case MOVING_TO_360:
 		angle = ContextGetCurrentAngle(ctx);
-		if (angle == 360)
-		{
-			uint32_t stopTime = getMSec() + SETTLE_TIME;
-			while (getMSec() < stopTime && angle == 360)
-			{
-				angle = ContextGetCurrentAngle(ctx);
-				s_println("looping");
-			}
-			if (angle != 360)
-				s_println("OVERSHOT");
-		}
-		
-		if (angle == 360 || (doPrint && lastAnglePrinted != angle))
+		arrived = (angle == 360 && ctx->m_pdc->m_idle);
+		if (arrived || (doPrint && lastAnglePrinted != angle))
 		{
 			lastAnglePrinted = angle;
 			s_println("%5ld angle %d", elapsed, angle);
 		}
 			
-		if (angle == 360)
+		if (arrived)
 		{
 			delayBegin = now;
 			state = FIRST_DELAY;
@@ -134,20 +123,14 @@ State ProgramTask(CommandIO* ciop, State state)
 		
 	case MOVING_TO_0:
 		angle = ContextGetCurrentAngle(ctx);
-		if (angle == 0)
-		{
-			uint32_t stopTime = getMSec() + SETTLE_TIME;
-			while (getMSec() < stopTime && angle == 0)
-				angle = ContextGetCurrentAngle(ctx);
-		}
-		
-		if (angle == 0 || (doPrint && lastAnglePrinted != angle))
+		arrived = (angle == 0 && ctx->m_pdc->m_idle);
+		if (arrived || (doPrint && lastAnglePrinted != angle))
 		{
 			lastAnglePrinted = angle;
 			s_println("%5ld angle %d", elapsed, angle);
 		}
 			
-		if (angle == 0)
+		if (arrived)
 		{
 			delayBegin = now;
 			state = SECOND_DELAY;
@@ -169,20 +152,14 @@ State ProgramTask(CommandIO* ciop, State state)
 		
 	case MOVING_TO_5:
 		angle = ContextGetCurrentAngle(ctx);
-		if (angle == 5)
-		{
-			uint32_t stopTime = getMSec() + SETTLE_TIME;
-			while (getMSec() < stopTime && angle == 0)
-				angle = ContextGetCurrentAngle(ctx);
-		}
-		
-		if (angle == 5 || (doPrint && lastAnglePrinted != angle))
+		arrived = (angle == 5 && ctx->m_pdc->m_idle);
+		if (arrived || (doPrint && lastAnglePrinted != angle))
 		{
 			lastAnglePrinted = angle;
 			s_println("%5ld angle %d", elapsed, angle);
 		}
 			
-		if (angle == 5)
+		if (arrived)
 		{
 			state = DONE;
 			delayBegin = now;

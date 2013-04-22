@@ -36,6 +36,7 @@ struct PDControl_
 	bool m_enabled; // task is allowed to run
 	bool m_targetAngleSet; // user has set a target angle
 	bool m_ready; // set on 2nd iter, so velocity can be calculated
+	bool m_idle; // true when the current angle == target
 	uint8_t m_maxAccel; // max delta torque is MOTOR_MAX_TORQUE/m_maxAccel
 	uint16_t m_period; // period of the PDControl task
 	MotorAngle m_lastAngle; // angle during previous iteration
