@@ -6,13 +6,51 @@ The PDController, running in the ISR for timer 3, a 20ms CTC timer.
 A millisecond timer, accurate to within %0.03, running in the ISR for timer 1, a 100us CTC timer.
 A console user interface task, running in the main loop.
 
-General functions for setting up CTC timers are in ktimers.[ch]
+General functions for setting up CTC timers are in ktimers.[ch] You may specify a period in msec, a timer number (0, 1, or 3), a callback function and an argument to pass to the callback function. The callback function is invoked from the ISR. In this way, you can easily setup a function to be called and not remember the specifics of how to define an ISR. There is also an option to setup timer 1 or 3 as a millisecond timer, to replace the pololou functions like get_ms() that use timer 2 (which is being used for the motor speed) adjustment.
+
+The kserial.[ch] files specify functions that perform serial I/O, including s_printf, used exactly like standard printf, except it writes to the serial output.
+
+The kutils.[ch] files contain some useful functions, including functions to return whether interrupts are currently enabled, and macros BEGIN_ATOMIC and END_ATOMIC, which ensure that interrupts are disabled between them, and that interrupts are restored to their previous state afterward.
+
+The kcmd.[ch] files contain functions that poll serial input each time they are called, accumulating characters until the user hits the enter key, when they return a value indicate a command has been entered. The command line is parsed into an argc/argv and a pre-registered function associated with argv[0], the command name, is invoked. This is easily extended to additional commands. The final list of commands I have written is
+	help or '?' {displays the following}
+	commands:
+		L {start/stop logging Pr, Pm, and T}
+		l {same as L}
+		kp new_value {set/get current value of Kp}
+		kd new_value {set/get current value of Kd}
+		info {displays the following info}
+			kp
+			kd
+			torque
+			target-angle
+			current-angle
+			max-acceleration
+			PDControl-period
+		acceleration factor {max acceleration will be MAX_TORQUE/factor}
+		torque new_value
+		rotate degrees {rotate the motor}
+		period {set msec period of PDControl task}
+		zero {stop motor, handlers, set angle to 0}
+		go
+		stop
+		xprog {run the canned program}
+		clock period nloops numerator denominator {test the 1 ms timer by setting a period}
+
+You may notice that I removed the P, p, D, and d commands in favor of the kp/kd commands that allow setting of Kp or Kd to specific values rather than nudging them up or down. Other useful commands include
+	period: for adjusting the period of the PDController
+	acceleration: for adjusting the maximum allowed change in torque for each iteration of the PDController (this avoids jackrabbit starts and sudden stops)
+	xprog: run the specified program (rotate 360, pause 0.5s, rotate -360, pause 0.5s, rotate 5).
+
+I modified the logging output from what you asked. A line of log output looks like this:
+ 19 Pr=2131, Pm=1954, T=1000, TC=1416, 8.00*177 + 0.00*0.0238, 1416 + 0, exceeds max
+The first number is a line number. TC is the calculated torque, 1416 in this case. You can see that 8.00 is Kp, 177 is (Pr-Pm), 0.00 is Kd, and 0.0238 is the velocity, in degrees/ms. The 8.00*177 + 0.00*0.0238 simplifies to 1416 + 0, so you can easily see how all factors contribute. In addition, there may be additional adjustments made to the torque. In this case, "exceeds max" indicates the the value computed, 1416, exceeds the maximum allowed. In my system, torque must be in the range [-1000,1000].
 
 Questions
 ---------
 1. Experiment with the speed of the motor: Run your motor at full speed. Modify your gains to achieve position control at that speed (as best you can). Slow the motor down as much as possible. Modify your gains to acheive position control. Repeat with one or two speeds in between. For each, record the approximate speed in rotations per second, record your equation (gains), and report on the behavior of the system and your ability to control the position.
 
-My program allows dynamic setting of the period of the PDControl task. At 1 KHz, a period of 1 msec, the speed is not interesting because it is always measured as 0. You recommended checking the speed only sometimes during the task, but doing it this way means that you are setting new torque every 1 msec but using a speed that was determined in the past. I opted instead to modify the period of the PDControl task. I experimented with this period, and a 100 msec there is significant overshoot in positioning, but at 10 msec the positioning is clean, and there is a measurable velocity. So I went with 10 msec.
+My program allows dynamic setting of the period of the PDControl task. At 1 KHz, a period of 1 msec, the speed is not interesting because it is always measured as 0. You recommended checking the speed only sometimes during the task, but doing it this way means that you are setting new torque every 1 msec but using a speed that was determined in the past. I opted instead to modify the period of the PDControl task. I experimented with this period, and a 100 msec there is significant overshoot in positioning, but at 20 msec the positioning is clean, and there is a measurable velocity. So I went with 20 msec.
 
 My torque calculation uses the formula as given, with some additional modifications
 	T = Kp*(Pr-Pm) + Kd*Vm
@@ -25,234 +63,223 @@ This compares with setting the motor torque directly (ignoring the control tasks
 
 The minimum torque that reliably produces motion is 4.5% of full on. The speed at that setting is 2/37.8=0.053 revolutions/sec. This can be achieved by setting Kp=Kd=0 and relying on the modifications I stated above, that the minimum torque is applied.
 
-Here is sample output with Kp=10, Kd=-20, performing a rotation of 360 degrees. Note that my torque is specified in a range of [-1000,1000].
-  1 Pr=180, Pm=0, T=250, TC=1800, 10.00*180 + -20.00*0.00, rapid acc, exceeds max
-  2 Pr=182, Pm=2, T=500, TC=1800, 10.00*180 + -20.00*0.00, rapid acc, exceeds max
-  3 Pr=185, Pm=5, T=750, TC=1800, 10.00*180 + -20.00*0.00, rapid acc, exceeds max
-  4 Pr=196, Pm=16, T=1000, TC=1840, 10.00*180 + -20.00*2.00, exceeds max
-  5 Pr=210, Pm=36, T=1000, TC=1860, 10.00*174 + -20.00*6.00, exceeds max
-  6 Pr=225, Pm=50, T=1000, TC=1850, 10.00*175 + -20.00*5.00, exceeds max
-  7 Pr=247, Pm=73, T=1000, TC=1860, 10.00*174 + -20.00*6.00, exceeds max
-  8 Pr=267, Pm=90, T=1000, TC=1890, 10.00*177 + -20.00*6.00, exceeds max
-  9 Pr=284, Pm=106, T=1000, TC=1880, 10.00*178 + -20.00*5.00, exceeds max
- 10 Pr=300, Pm=126, T=1000, TC=1900, 10.00*174 + -20.00*8.00, exceeds max
- 11 Pr=317, Pm=143, T=1000, TC=1860, 10.00*174 + -20.00*6.00, exceeds max
- 12 Pr=337, Pm=160, T=1000, TC=1890, 10.00*177 + -20.00*6.00, exceeds max
- 13 Pr=360, Pm=182, T=1000, TC=1880, 10.00*178 + -20.00*5.00, exceeds max
- 14 Pr=360, Pm=202, T=1000, TC=1700, 10.00*158 + -20.00*6.00, exceeds max
- 15 Pr=360, Pm=219, T=1000, TC=1530, 10.00*141 + -20.00*6.00, exceeds max
- 16 Pr=360, Pm=239, T=1000, TC=1390, 10.00*121 + -20.00*9.00, exceeds max
- 17 Pr=360, Pm=255, T=1000, TC=1150, 10.00*105 + -20.00*5.00, exceeds max
- 18 Pr=360, Pm=278, T=940
- 19 Pr=360, Pm=295, T=770
- 20 Pr=360, Pm=320, T=560
- 21 Pr=360, Pm=340, T=320
- 22 Pr=360, Pm=357, T=90
- 23 Pr=360, Pm=368, T=-45, TC=-20, 10.00*-8 + -20.00*3.00, no movement
- 24 Pr=360, Pm=374, T=-140
- 25 Pr=360, Pm=371, T=-170
- 26 Pr=360, Pm=368, T=-80
- 27 Pr=360, Pm=365, T=-50
- 28 Pr=360, Pm=362, T=-80
- 29 Pr=360, Pm=362, T=-45, TC=-20, 10.00*-2 + -20.00*0.00, no movement
- 30 Pr=360, Pm=360, T=0
+Here is sample output with Kp=20, Kd=-1000, performing a rotation of 360 degrees. Note that my torque is specified in a range of [-1000,1000].
+  1 Pr=180, Pm=0, T=250, TC=3600, 20.00*180 + -1000.00*0.0000, 3600 + 0, rapid acc, exceeds max
+  2 Pr=180, Pm=0, T=500, TC=3600, 20.00*180 + -1000.00*0.0000, 3600 + 0, rapid acc, exceeds max
+  3 Pr=182, Pm=2, T=750, TC=3595, 20.00*180 + -1000.00*0.0043, 3600 + -4, rapid acc, exceeds max
+  4 Pr=185, Pm=5, T=1000, TC=3593, 20.00*180 + -1000.00*0.0065, 3600 + -6, exceeds max
+  5 Pr=191, Pm=11, T=1000, TC=3586, 20.00*180 + -1000.00*0.0130, 3600 + -13, exceeds max
+  6 Pr=196, Pm=16, T=1000, TC=3589, 20.00*180 + -1000.00*0.0108, 3600 + -10, exceeds max
+  7 Pr=205, Pm=25, T=1000, TC=3580, 20.00*180 + -1000.00*0.0194, 3600 + -19, exceeds max
+  8 Pr=213, Pm=33, T=1000, TC=3582, 20.00*180 + -1000.00*0.0173, 3600 + -17, exceeds max
+  9 Pr=222, Pm=45, T=1000, TC=3514, 20.00*177 + -1000.00*0.0260, 3540 + -25, exceeds max
+ 10 Pr=233, Pm=56, T=1000, TC=3516, 20.00*177 + -1000.00*0.0238, 3540 + -23, exceeds max
+ 11 Pr=244, Pm=64, T=1000, TC=3582, 20.00*180 + -1000.00*0.0173, 3600 + -17, exceeds max
+ 12 Pr=255, Pm=78, T=1000, TC=3509, 20.00*177 + -1000.00*0.0303, 3540 + -30, exceeds max
+ 13 Pr=267, Pm=87, T=1000, TC=3580, 20.00*180 + -1000.00*0.0194, 3600 + -19, exceeds max
+ 14 Pr=278, Pm=101, T=1000, TC=3509, 20.00*177 + -1000.00*0.0303, 3540 + -30, exceeds max
+ 15 Pr=289, Pm=109, T=1000, TC=3582, 20.00*180 + -1000.00*0.0173, 3600 + -17, exceeds max
+ 16 Pr=300, Pm=123, T=1000, TC=3509, 20.00*177 + -1000.00*0.0303, 3540 + -30, exceeds max
+ 17 Pr=312, Pm=135, T=1000, TC=3514, 20.00*177 + -1000.00*0.0259, 3540 + -25, exceeds max
+ 18 Pr=323, Pm=146, T=1000, TC=3516, 20.00*177 + -1000.00*0.0238, 3540 + -23, exceeds max
+ 19 Pr=334, Pm=157, T=1000, TC=3516, 20.00*177 + -1000.00*0.0238, 3540 + -23, exceeds max
+ 20 Pr=345, Pm=168, T=1000, TC=3516, 20.00*177 + -1000.00*0.0238, 3540 + -23, exceeds max
+ 21 Pr=360, Pm=182, T=1000, TC=3529, 20.00*178 + -1000.00*0.0303, 3560 + -30, exceeds max
+ 22 Pr=360, Pm=194, T=1000, TC=3294, 20.00*166 + -1000.00*0.0260, 3320 + -25, exceeds max
+ 23 Pr=360, Pm=205, T=1000, TC=3076, 20.00*155 + -1000.00*0.0238, 3100 + -23, exceeds max
+ 24 Pr=360, Pm=216, T=1000, TC=2856, 20.00*144 + -1000.00*0.0238, 2880 + -23, exceeds max
+ 25 Pr=360, Pm=227, T=1000, TC=2636, 20.00*133 + -1000.00*0.0238, 2660 + -23, exceeds max
+ 26 Pr=360, Pm=239, T=1000, TC=2394, 20.00*121 + -1000.00*0.0260, 2420 + -25, exceeds max
+ 27 Pr=360, Pm=253, T=1000, TC=2109, 20.00*107 + -1000.00*0.0302, 2140 + -30, exceeds max
+ 28 Pr=360, Pm=264, T=1000, TC=1896, 20.00*96 + -1000.00*0.0238, 1920 + -23, exceeds max
+ 29 Pr=360, Pm=275, T=1000, TC=1676, 20.00*85 + -1000.00*0.0238, 1700 + -23, exceeds max
+ 30 Pr=360, Pm=286, T=1000, TC=1456, 20.00*74 + -1000.00*0.0238, 1480 + -23, exceeds max
+ 31 Pr=360, Pm=300, T=1000, TC=1169, 20.00*60 + -1000.00*0.0302, 1200 + -30, exceeds max
+ 32 Pr=360, Pm=312, T=934, TC=934, 20.00*48 + -1000.00*0.0260, 960 + -25
+ 33 Pr=360, Pm=323, T=716, TC=716, 20.00*37 + -1000.00*0.0239, 740 + -23
+ 34 Pr=360, Pm=334, T=496, TC=496, 20.00*26 + -1000.00*0.0239, 520 + -23
+ 35 Pr=360, Pm=345, T=276, TC=276, 20.00*15 + -1000.00*0.0239, 300 + -23
+ 36 Pr=360, Pm=357, T=45, TC=33, 20.00*3 + -1000.00*0.0261, 60 + -26, no movement
+ 37 Pr=360, Pm=362, T=-50, TC=-50, 20.00*-2 + -1000.00*0.0109, -40 + -10
+ 38 Pr=360, Pm=368, T=-173, TC=-173, 20.00*-8 + -1000.00*0.0130, -160 + -13
+ 39 Pr=360, Pm=371, T=-226, TC=-226, 20.00*-11 + -1000.00*0.0065, -220 + -6
+ 40 Pr=360, Pm=371, T=-220, TC=-220, 20.00*-11 + -1000.00*0.0000, -220 + 0
+ 41 Pr=360, Pm=368, T=-153, TC=-153, 20.00*-8 + -1000.00*-0.0065, -160 + 6
+ 42 Pr=360, Pm=365, T=-93, TC=-93, 20.00*-5 + -1000.00*-0.0065, -100 + 6
+ 43 Pr=360, Pm=365, T=-100, TC=-100, 20.00*-5 + -1000.00*0.0000, -100 + 0
+ 44 Pr=360, Pm=362, T=-45, TC=-33, 20.00*-2 + -1000.00*-0.0065, -40 + 6, no movement
+ 45 Pr=360, Pm=362, T=-45, TC=-40, 20.00*-2 + -1000.00*0.0000, -40 + 0, no movement
+ 46 Pr=360, Pm=360, T=0, TC=0, 20.00*0 + -1000.00*0.0000, 0 + 0
 
-As you can see, Pr starts out at 180 and gradually moves to 360. That is because the trajectory interpolator gives PDControl a max delta of 180. You can see the effect of limiting the acceleration in the first few iterations. The calculated torque (given as TC), is larger than the max, and the change from zero can be at most 1/4 of 1000, or 250. That is why the torque used, T, goes from 0, to 250, to 500, to 750, and finally to 1000. Once the torque reaches 1000, it maxes out, despite the formula producing larger calculations. As we near the target of 360, the torque drops, but you can see that it overshoots to a maximum of 374 degrees. You also see that twice the computed torque was too small to produce motion, and so the minimum (45) was used.
+As you can see, Pr starts out at 180 and gradually moves to 360. That is because the trajectory interpolator gives PDControl a max delta of 180. You can see the effect of limiting the acceleration in the first few iterations. The calculated torque (given as TC), is larger than the max, and the change from zero can be at most 1/4 of 1000, or 250. That is why the torque used, T, goes from 0, to 250, to 500, to 750, and finally to 1000. Once the torque reaches 1000, it maxes out, despite the formula producing larger calculations. As we near the target of 360, the torque drops, but you can see that it overshoots to a maximum of 371 degrees. You also see that several times the computed torque was too small to produce motion, and so the minimum (+-45) was used.
 
-Testing various values for Kd seem to make little difference. Here are the results with Kd=-5.
-  1 Pr=180, Pm=0, T=250, TC=1800, 10.00*180 + -5.00*0.00, rapid acc, exceeds max
-  2 Pr=180, Pm=0, T=500, TC=1800, 10.00*180 + -5.00*0.00, rapid acc, exceeds max
-  3 Pr=185, Pm=5, T=750, TC=1800, 10.00*180 + -5.00*0.00, rapid acc, exceeds max
-  4 Pr=196, Pm=16, T=1000, TC=1810, 10.00*180 + -5.00*2.00, exceeds max
-  5 Pr=210, Pm=33, T=1000, TC=1795, 10.00*177 + -5.00*5.00, exceeds max
-  6 Pr=225, Pm=50, T=1000, TC=1775, 10.00*175 + -5.00*5.00, exceeds max
-  7 Pr=241, Pm=64, T=1000, TC=1795, 10.00*177 + -5.00*5.00, exceeds max
-  8 Pr=264, Pm=87, T=1000, TC=1785, 10.00*177 + -5.00*3.00, exceeds max
-  9 Pr=281, Pm=106, T=1000, TC=1775, 10.00*175 + -5.00*5.00, exceeds max
- 10 Pr=300, Pm=123, T=1000, TC=1795, 10.00*177 + -5.00*5.00, exceeds max
- 11 Pr=317, Pm=140, T=1000, TC=1785, 10.00*177 + -5.00*3.00, exceeds max
- 12 Pr=334, Pm=160, T=1000, TC=1770, 10.00*174 + -5.00*6.00, exceeds max
- 13 Pr=351, Pm=177, T=1000, TC=1770, 10.00*174 + -5.00*6.00, exceeds max
- 14 Pr=360, Pm=199, T=1000, TC=1635, 10.00*161 + -5.00*5.00, exceeds max
- 15 Pr=360, Pm=219, T=1000, TC=1440, 10.00*141 + -5.00*6.00, exceeds max
- 16 Pr=360, Pm=236, T=1000, TC=1270, 10.00*124 + -5.00*6.00, exceeds max
- 17 Pr=360, Pm=255, T=1000, TC=1075, 10.00*105 + -5.00*5.00, exceeds max
- 18 Pr=360, Pm=272, T=905
- 19 Pr=360, Pm=295, T=680
- 20 Pr=360, Pm=317, T=455
- 21 Pr=360, Pm=337, T=260
- 22 Pr=360, Pm=351, T=105
- 23 Pr=360, Pm=360, T=0
- 24 Pr=360, Pm=365, T=-45, TC=-35, 10.00*-5 + -5.00*3.00, no movement
- 25 Pr=360, Pm=365, T=-50
- 26 Pr=360, Pm=362, T=-45, TC=-35, 10.00*-2 + -5.00*-3.00, no movement
- 27 Pr=360, Pm=362, T=-45, TC=-20, 10.00*-2 + -5.00*0.00, no movement
- 28 Pr=360, Pm=360, T=0
+Testing various values for Kd seem to make little difference. Here are the results with Kd=-2000.
+  1 Pr=180, Pm=0, T=250, TC=3600, 20.00*180 + -2000.00*0.0000, 3600 + 0, rapid acc, exceeds max
+  2 Pr=180, Pm=0, T=500, TC=3600, 20.00*180 + -2000.00*0.0000, 3600 + 0, rapid acc, exceeds max
+  3 Pr=182, Pm=2, T=750, TC=3591, 20.00*180 + -2000.00*0.0043, 3600 + -8, rapid acc, exceeds max
+  4 Pr=185, Pm=5, T=1000, TC=3586, 20.00*180 + -2000.00*0.0065, 3600 + -13, exceeds max
+  5 Pr=191, Pm=11, T=1000, TC=3573, 20.00*180 + -2000.00*0.0130, 3600 + -26, exceeds max
+  6 Pr=196, Pm=19, T=1000, TC=3505, 20.00*177 + -2000.00*0.0173, 3540 + -34, exceeds max
+  7 Pr=208, Pm=28, T=1000, TC=3561, 20.00*180 + -2000.00*0.0194, 3600 + -38, exceeds max
+  8 Pr=216, Pm=36, T=1000, TC=3565, 20.00*180 + -2000.00*0.0173, 3600 + -34, exceeds max
+  9 Pr=225, Pm=47, T=1000, TC=3512, 20.00*178 + -2000.00*0.0238, 3560 + -47, exceeds max
+ 10 Pr=236, Pm=56, T=1000, TC=3561, 20.00*180 + -2000.00*0.0194, 3600 + -38, exceeds max
+ 11 Pr=247, Pm=67, T=1000, TC=3552, 20.00*180 + -2000.00*0.0238, 3600 + -47, exceeds max
+ 12 Pr=255, Pm=78, T=1000, TC=3492, 20.00*177 + -2000.00*0.0238, 3540 + -47, exceeds max
+ 13 Pr=267, Pm=90, T=1000, TC=3488, 20.00*177 + -2000.00*0.0260, 3540 + -51, exceeds max
+ 14 Pr=278, Pm=101, T=1000, TC=3492, 20.00*177 + -2000.00*0.0238, 3540 + -47, exceeds max
+ 15 Pr=289, Pm=112, T=1000, TC=3492, 20.00*177 + -2000.00*0.0238, 3540 + -47, exceeds max
+ 16 Pr=303, Pm=123, T=1000, TC=3552, 20.00*180 + -2000.00*0.0238, 3600 + -47, exceeds max
+ 17 Pr=315, Pm=135, T=1000, TC=3548, 20.00*180 + -2000.00*0.0259, 3600 + -51, exceeds max
+ 18 Pr=326, Pm=146, T=1000, TC=3552, 20.00*180 + -2000.00*0.0238, 3600 + -47, exceeds max
+ 19 Pr=337, Pm=157, T=1000, TC=3552, 20.00*180 + -2000.00*0.0238, 3600 + -47, exceeds max
+ 20 Pr=348, Pm=171, T=1000, TC=3479, 20.00*177 + -2000.00*0.0302, 3540 + -60, exceeds max
+ 21 Pr=360, Pm=182, T=1000, TC=3512, 20.00*178 + -2000.00*0.0238, 3560 + -47, exceeds max
+ 22 Pr=360, Pm=194, T=1000, TC=3268, 20.00*166 + -2000.00*0.0260, 3320 + -51, exceeds max
+ 23 Pr=360, Pm=205, T=1000, TC=3052, 20.00*155 + -2000.00*0.0238, 3100 + -47, exceeds max
+ 24 Pr=360, Pm=216, T=1000, TC=2832, 20.00*144 + -2000.00*0.0238, 2880 + -47, exceeds max
+ 25 Pr=360, Pm=227, T=1000, TC=2612, 20.00*133 + -2000.00*0.0238, 2660 + -47, exceeds max
+ 26 Pr=360, Pm=239, T=1000, TC=2368, 20.00*121 + -2000.00*0.0260, 2420 + -51, exceeds max
+ 27 Pr=360, Pm=250, T=1000, TC=2152, 20.00*110 + -2000.00*0.0238, 2200 + -47, exceeds max
+ 28 Pr=360, Pm=264, T=1000, TC=1859, 20.00*96 + -2000.00*0.0303, 1920 + -60, exceeds max
+ 29 Pr=360, Pm=275, T=1000, TC=1652, 20.00*85 + -2000.00*0.0238, 1700 + -47, exceeds max
+ 30 Pr=360, Pm=286, T=1000, TC=1432, 20.00*74 + -2000.00*0.0238, 1480 + -47, exceeds max
+ 31 Pr=360, Pm=300, T=1000, TC=1139, 20.00*60 + -2000.00*0.0302, 1200 + -60, exceeds max
+ 32 Pr=360, Pm=312, T=908, TC=908, 20.00*48 + -2000.00*0.0260, 960 + -51
+ 33 Pr=360, Pm=323, T=692, TC=692, 20.00*37 + -2000.00*0.0239, 740 + -47
+ 34 Pr=360, Pm=334, T=472, TC=472, 20.00*26 + -2000.00*0.0239, 520 + -47
+ 35 Pr=360, Pm=345, T=252, TC=252, 20.00*15 + -2000.00*0.0239, 300 + -47
+ 36 Pr=360, Pm=354, T=80, TC=80, 20.00*6 + -2000.00*0.0196, 120 + -39
+ 37 Pr=360, Pm=362, T=-74, TC=-74, 20.00*-2 + -2000.00*0.0174, -40 + -34
+ 38 Pr=360, Pm=365, T=-113, TC=-113, 20.00*-5 + -2000.00*0.0065, -100 + -13
+ 39 Pr=360, Pm=368, T=-173, TC=-173, 20.00*-8 + -2000.00*0.0065, -160 + -13
+ 40 Pr=360, Pm=368, T=-160, TC=-160, 20.00*-8 + -2000.00*0.0000, -160 + 0
+ 41 Pr=360, Pm=365, T=-87, TC=-87, 20.00*-5 + -2000.00*-0.0065, -100 + 12
+ 42 Pr=360, Pm=365, T=-100, TC=-100, 20.00*-5 + -2000.00*0.0000, -100 + 0
+ 43 Pr=360, Pm=362, T=-45, TC=-27, 20.00*-2 + -2000.00*-0.0065, -40 + 12, no movement
+ 44 Pr=360, Pm=362, T=-45, TC=-40, 20.00*-2 + -2000.00*0.0000, -40 + 0, no movement
+ 45 Pr=360, Pm=360, T=0, TC=0, 20.00*0 + -2000.00*0.0000, 0 + 0
 
-You can see that the overshoot is slightly smaller with Kd=-5, but it gets to the target sooner, with 28 lines of log output rather than 30 previously.
+You can see that the overshoot is slightly smaller with Kd=-2000, but it gets to the target sooner, with 45 lines of log output rather than 46 previously.
 
-Experimenting with various values shows that a value of Kp=8 and Kd=-6 produce very smooth results:
-  1 Pr=180, Pm=0, T=250, TC=1440, 8.00*180 + -6.00*0.00, rapid acc, exceeds max
-  2 Pr=180, Pm=0, T=500, TC=1440, 8.00*180 + -6.00*0.00, rapid acc, exceeds max
-  3 Pr=185, Pm=5, T=750, TC=1440, 8.00*180 + -6.00*0.00, rapid acc, exceeds max
-  4 Pr=196, Pm=16, T=1000, TC=1452, 8.00*180 + -6.00*2.00, exceeds max
-  5 Pr=216, Pm=36, T=1000, TC=1476, 8.00*180 + -6.00*6.00, exceeds max
-  6 Pr=230, Pm=50, T=1000, TC=1470, 8.00*180 + -6.00*5.00, exceeds max
-  7 Pr=241, Pm=67, T=1000, TC=1428, 8.00*174 + -6.00*6.00, exceeds max
-  8 Pr=258, Pm=84, T=1000, TC=1428, 8.00*174 + -6.00*6.00, exceeds max
-  9 Pr=275, Pm=101, T=1000, TC=1428, 8.00*174 + -6.00*6.00, exceeds max
- 10 Pr=300, Pm=126, T=1000, TC=1428, 8.00*174 + -6.00*6.00, exceeds max
- 11 Pr=317, Pm=143, T=1000, TC=1428, 8.00*174 + -6.00*6.00, exceeds max
- 12 Pr=334, Pm=160, T=1000, TC=1428, 8.00*174 + -6.00*6.00, exceeds max
- 13 Pr=354, Pm=177, T=1000, TC=1452, 8.00*177 + -6.00*6.00, exceeds max
- 14 Pr=360, Pm=196, T=1000, TC=1360, 8.00*164 + -6.00*8.00, exceeds max
- 15 Pr=360, Pm=213, T=1000, TC=1206, 8.00*147 + -6.00*5.00, exceeds max
- 16 Pr=360, Pm=239, T=1000, TC=1022, 8.00*121 + -6.00*9.00, exceeds max
- 17 Pr=360, Pm=255, T=870
- 18 Pr=360, Pm=278, T=692
- 19 Pr=360, Pm=298, T=514
- 20 Pr=360, Pm=317, T=356
- 21 Pr=360, Pm=334, T=226
- 22 Pr=360, Pm=343, T=154
- 23 Pr=360, Pm=354, T=66
- 24 Pr=360, Pm=357, T=45, TC=24, 8.00*3 + -6.00*0.00, no movement
- 25 Pr=360, Pm=360, T=0
-You can see that there is no overshoot, and there are only 25 lines of log output.
+Experimenting with various values shows that a value of Kp=10 and Kd=-1000 produce very smooth results:
+  1 Pr=180, Pm=0, T=250, TC=1800, 10.00*180 + -1000.00*0.0000, 1800 + 0, rapid acc, exceeds max
+  2 Pr=180, Pm=0, T=500, TC=1800, 10.00*180 + -1000.00*0.0000, 1800 + 0, rapid acc, exceeds max
+  3 Pr=182, Pm=2, T=750, TC=1795, 10.00*180 + -1000.00*0.0043, 1800 + -4, rapid acc, exceeds max
+  4 Pr=185, Pm=5, T=1000, TC=1793, 10.00*180 + -1000.00*0.0065, 1800 + -6, exceeds max
+  5 Pr=191, Pm=11, T=1000, TC=1786, 10.00*180 + -1000.00*0.0130, 1800 + -13, exceeds max
+  6 Pr=196, Pm=19, T=1000, TC=1752, 10.00*177 + -1000.00*0.0173, 1770 + -17, exceeds max
+  7 Pr=205, Pm=28, T=1000, TC=1750, 10.00*177 + -1000.00*0.0195, 1770 + -19, exceeds max
+  8 Pr=213, Pm=36, T=1000, TC=1752, 10.00*177 + -1000.00*0.0173, 1770 + -17, exceeds max
+  9 Pr=225, Pm=45, T=1000, TC=1780, 10.00*180 + -1000.00*0.0194, 1800 + -19, exceeds max
+ 10 Pr=236, Pm=56, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 11 Pr=244, Pm=67, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 12 Pr=255, Pm=78, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 13 Pr=267, Pm=90, T=1000, TC=1744, 10.00*177 + -1000.00*0.0259, 1770 + -25, exceeds max
+ 14 Pr=281, Pm=101, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 15 Pr=292, Pm=115, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 16 Pr=303, Pm=126, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 17 Pr=315, Pm=137, T=1000, TC=1756, 10.00*178 + -1000.00*0.0238, 1780 + -23, exceeds max
+ 18 Pr=329, Pm=149, T=1000, TC=1774, 10.00*180 + -1000.00*0.0260, 1800 + -25, exceeds max
+ 19 Pr=340, Pm=160, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 20 Pr=351, Pm=171, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 21 Pr=360, Pm=182, T=1000, TC=1756, 10.00*178 + -1000.00*0.0238, 1780 + -23, exceeds max
+ 22 Pr=360, Pm=196, T=1000, TC=1609, 10.00*164 + -1000.00*0.0303, 1640 + -30, exceeds max
+ 23 Pr=360, Pm=208, T=1000, TC=1494, 10.00*152 + -1000.00*0.0259, 1520 + -25, exceeds max
+ 24 Pr=360, Pm=219, T=1000, TC=1386, 10.00*141 + -1000.00*0.0238, 1410 + -23, exceeds max
+ 25 Pr=360, Pm=230, T=1000, TC=1276, 10.00*130 + -1000.00*0.0238, 1300 + -23, exceeds max
+ 26 Pr=360, Pm=244, T=1000, TC=1129, 10.00*116 + -1000.00*0.0302, 1160 + -30, exceeds max
+ 27 Pr=360, Pm=255, T=1000, TC=1026, 10.00*105 + -1000.00*0.0238, 1050 + -23, exceeds max
+ 28 Pr=360, Pm=267, T=904, TC=904, 10.00*93 + -1000.00*0.0260, 930 + -25
+ 29 Pr=360, Pm=278, T=796, TC=796, 10.00*82 + -1000.00*0.0239, 820 + -23
+ 30 Pr=360, Pm=289, T=686, TC=686, 10.00*71 + -1000.00*0.0239, 710 + -23
+ 31 Pr=360, Pm=300, T=576, TC=576, 10.00*60 + -1000.00*0.0239, 600 + -23
+ 32 Pr=360, Pm=312, T=453, TC=453, 10.00*48 + -1000.00*0.0261, 480 + -26
+ 33 Pr=360, Pm=323, T=346, TC=346, 10.00*37 + -1000.00*0.0239, 370 + -23
+ 34 Pr=360, Pm=331, T=272, TC=272, 10.00*29 + -1000.00*0.0174, 290 + -17
+ 35 Pr=360, Pm=340, T=180, TC=180, 10.00*20 + -1000.00*0.0196, 200 + -19
+ 36 Pr=360, Pm=345, T=139, TC=139, 10.00*15 + -1000.00*0.0109, 150 + -10
+ 37 Pr=360, Pm=351, T=76, TC=76, 10.00*9 + -1000.00*0.0130, 90 + -13
+ 38 Pr=360, Pm=354, T=53, TC=53, 10.00*6 + -1000.00*0.0065, 60 + -6
+ 39 Pr=360, Pm=357, T=45, TC=23, 10.00*3 + -1000.00*0.0065, 30 + -6, no movement
+ 40 Pr=360, Pm=360, T=0, TC=0, 10.00*0 + -1000.00*0.0000, 0 + 0
+You can see that there is no overshoot, and there are only 40 lines of log output.
 
 2. Change the step size to something very large (more than 2pi), and try a reference position of 4pi+current_position. How does system behavior differ from your tuned step size? Try tuning your controller for that very large step size. What happens if you then set the reference position to be very close to the current position (within a few degrees)? 
 
 The controller is requires no special tuning for different step sizes. Here is sample output for a rotation of 720 degrees.
-  1 Pr=180, Pm=0, T=250, TC=1080, 6.00*180 + -6.00*0.00, rapid acc, exceeds max
-  2 Pr=182, Pm=2, T=500, TC=1080, 6.00*180 + -6.00*0.00, rapid acc, exceeds max
-  3 Pr=188, Pm=8, T=750, TC=1098, 6.00*180 + -6.00*3.00, rapid acc, exceeds max
-  4 Pr=199, Pm=19, T=1000, TC=1098, 6.00*180 + -6.00*3.00, exceeds max
-  5 Pr=213, Pm=33, T=1000, TC=1098, 6.00*180 + -6.00*3.00, exceeds max
-  6 Pr=233, Pm=53, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
-  7 Pr=250, Pm=70, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
-  8 Pr=267, Pm=90, T=1000, TC=1116, 6.00*177 + -6.00*9.00, exceeds max
-  9 Pr=284, Pm=106, T=1000, TC=1098, 6.00*178 + -6.00*5.00, exceeds max
- 10 Pr=303, Pm=126, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
- 11 Pr=323, Pm=143, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 12 Pr=340, Pm=163, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
- 13 Pr=360, Pm=180, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 14 Pr=385, Pm=205, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 15 Pr=402, Pm=225, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
- 16 Pr=421, Pm=241, T=1000, TC=1110, 6.00*180 + -6.00*5.00, exceeds max
- 17 Pr=438, Pm=261, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
- 18 Pr=458, Pm=278, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 19 Pr=475, Pm=298, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
- 20 Pr=500, Pm=323, T=1000, TC=1110, 6.00*177 + -6.00*8.00, exceeds max
- 21 Pr=520, Pm=343, T=1000, TC=1116, 6.00*177 + -6.00*9.00, exceeds max
- 22 Pr=540, Pm=360, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 23 Pr=556, Pm=379, T=1000, TC=1110, 6.00*177 + -6.00*8.00, exceeds max
- 24 Pr=576, Pm=399, T=1000, TC=1098, 6.00*177 + -6.00*6.00, exceeds max
- 25 Pr=601, Pm=421, T=1000, TC=1110, 6.00*180 + -6.00*5.00, exceeds max
- 26 Pr=621, Pm=441, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 27 Pr=641, Pm=461, T=1000, TC=1116, 6.00*180 + -6.00*6.00, exceeds max
- 28 Pr=660, Pm=480, T=1000, TC=1110, 6.00*180 + -6.00*5.00, exceeds max
- 29 Pr=677, Pm=497, T=1000, TC=1110, 6.00*180 + -6.00*5.00, exceeds max
- 30 Pr=703, Pm=525, T=1000, TC=1116, 6.00*178 + -6.00*8.00, exceeds max
- 31 Pr=720, Pm=542, T=1000, TC=1098, 6.00*178 + -6.00*5.00, exceeds max
- 32 Pr=720, Pm=562, T=984
- 33 Pr=720, Pm=590, T=828
- 34 Pr=720, Pm=613, T=678
- 35 Pr=720, Pm=635, T=540
- 36 Pr=720, Pm=652, T=444
- 37 Pr=720, Pm=669, T=324
- 38 Pr=720, Pm=686, T=240
- 39 Pr=720, Pm=697, T=174
- 40 Pr=720, Pm=703, T=102
- 41 Pr=720, Pm=708, T=72
- 42 Pr=720, Pm=711, T=54
- 43 Pr=720, Pm=714, T=45, TC=36, 6.00*6 + -6.00*0.00, no movement
- 44 Pr=720, Pm=717, T=45, TC=36, 6.00*3 + -6.00*3.00, no movement
- 45 Pr=720, Pm=717, T=45, TC=18, 6.00*3 + -6.00*0.00, no movement
- 46 Pr=720, Pm=720, T=0
+  1 Pr=180, Pm=0, T=250, TC=1800, 10.00*180 + -1000.00*0.0000, 1800 + 0, rapid acc, exceeds max
+  2 Pr=180, Pm=0, T=500, TC=1800, 10.00*180 + -1000.00*0.0000, 1800 + 0, rapid acc, exceeds max
+  3 Pr=182, Pm=2, T=750, TC=1795, 10.00*180 + -1000.00*0.0043, 1800 + -4, rapid acc, exceeds max
+  4 Pr=185, Pm=5, T=1000, TC=1793, 10.00*180 + -1000.00*0.0065, 1800 + -6, exceeds max
+  5 Pr=191, Pm=11, T=1000, TC=1786, 10.00*180 + -1000.00*0.0130, 1800 + -13, exceeds max
+  6 Pr=196, Pm=19, T=1000, TC=1752, 10.00*177 + -1000.00*0.0173, 1770 + -17, exceeds max
+  7 Pr=208, Pm=28, T=1000, TC=1780, 10.00*180 + -1000.00*0.0195, 1800 + -19, exceeds max
+  8 Pr=216, Pm=36, T=1000, TC=1782, 10.00*180 + -1000.00*0.0173, 1800 + -17, exceeds max
+  9 Pr=225, Pm=47, T=1000, TC=1756, 10.00*178 + -1000.00*0.0238, 1780 + -23, exceeds max
+ 10 Pr=236, Pm=56, T=1000, TC=1780, 10.00*180 + -1000.00*0.0194, 1800 + -19, exceeds max
+ 11 Pr=247, Pm=67, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 12 Pr=258, Pm=78, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 13 Pr=270, Pm=92, T=1000, TC=1749, 10.00*178 + -1000.00*0.0302, 1780 + -30, exceeds max
+ 14 Pr=281, Pm=104, T=1000, TC=1744, 10.00*177 + -1000.00*0.0260, 1770 + -25, exceeds max
+ 15 Pr=292, Pm=115, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 16 Pr=303, Pm=126, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 17 Pr=317, Pm=137, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 18 Pr=329, Pm=149, T=1000, TC=1774, 10.00*180 + -1000.00*0.0260, 1800 + -25, exceeds max
+ 19 Pr=340, Pm=160, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 20 Pr=351, Pm=174, T=1000, TC=1739, 10.00*177 + -1000.00*0.0302, 1770 + -30, exceeds max
+ 21 Pr=362, Pm=185, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 22 Pr=374, Pm=196, T=1000, TC=1756, 10.00*178 + -1000.00*0.0238, 1780 + -23, exceeds max
+ 23 Pr=385, Pm=208, T=1000, TC=1744, 10.00*177 + -1000.00*0.0259, 1770 + -25, exceeds max
+ 24 Pr=399, Pm=222, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 25 Pr=410, Pm=233, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 26 Pr=421, Pm=244, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 27 Pr=435, Pm=255, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 28 Pr=447, Pm=267, T=1000, TC=1774, 10.00*180 + -1000.00*0.0260, 1800 + -25, exceeds max
+ 29 Pr=458, Pm=278, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 30 Pr=469, Pm=289, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 31 Pr=480, Pm=303, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 32 Pr=492, Pm=315, T=1000, TC=1744, 10.00*177 + -1000.00*0.0260, 1770 + -25, exceeds max
+ 33 Pr=506, Pm=329, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 34 Pr=517, Pm=340, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 35 Pr=528, Pm=351, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 36 Pr=542, Pm=365, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 37 Pr=554, Pm=376, T=1000, TC=1756, 10.00*178 + -1000.00*0.0238, 1780 + -23, exceeds max
+ 38 Pr=565, Pm=388, T=1000, TC=1744, 10.00*177 + -1000.00*0.0260, 1770 + -25, exceeds max
+ 39 Pr=579, Pm=399, T=1000, TC=1776, 10.00*180 + -1000.00*0.0238, 1800 + -23, exceeds max
+ 40 Pr=590, Pm=413, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 41 Pr=601, Pm=424, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 42 Pr=615, Pm=438, T=1000, TC=1739, 10.00*177 + -1000.00*0.0303, 1770 + -30, exceeds max
+ 43 Pr=627, Pm=450, T=1000, TC=1744, 10.00*177 + -1000.00*0.0260, 1770 + -25, exceeds max
+ 44 Pr=641, Pm=464, T=1000, TC=1739, 10.00*177 + -1000.00*0.0302, 1770 + -30, exceeds max
+ 45 Pr=652, Pm=475, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 46 Pr=663, Pm=486, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 47 Pr=677, Pm=500, T=1000, TC=1739, 10.00*177 + -1000.00*0.0302, 1770 + -30, exceeds max
+ 48 Pr=689, Pm=511, T=1000, TC=1756, 10.00*178 + -1000.00*0.0238, 1780 + -23, exceeds max
+ 49 Pr=700, Pm=523, T=1000, TC=1744, 10.00*177 + -1000.00*0.0260, 1770 + -25, exceeds max
+ 50 Pr=711, Pm=534, T=1000, TC=1746, 10.00*177 + -1000.00*0.0238, 1770 + -23, exceeds max
+ 51 Pr=720, Pm=548, T=1000, TC=1689, 10.00*172 + -1000.00*0.0302, 1720 + -30, exceeds max
+ 52 Pr=720, Pm=559, T=1000, TC=1586, 10.00*161 + -1000.00*0.0238, 1610 + -23, exceeds max
+ 53 Pr=720, Pm=570, T=1000, TC=1476, 10.00*150 + -1000.00*0.0238, 1500 + -23, exceeds max
+ 54 Pr=720, Pm=582, T=1000, TC=1354, 10.00*138 + -1000.00*0.0259, 1380 + -25, exceeds max
+ 55 Pr=720, Pm=596, T=1000, TC=1209, 10.00*124 + -1000.00*0.0303, 1240 + -30, exceeds max
+ 56 Pr=720, Pm=607, T=1000, TC=1106, 10.00*113 + -1000.00*0.0238, 1130 + -23, exceeds max
+ 57 Pr=720, Pm=621, T=959, TC=959, 10.00*99 + -1000.00*0.0303, 990 + -30
+ 58 Pr=720, Pm=632, T=856, TC=856, 10.00*88 + -1000.00*0.0239, 880 + -23
+ 59 Pr=720, Pm=644, T=733, TC=733, 10.00*76 + -1000.00*0.0261, 760 + -26
+ 60 Pr=720, Pm=655, T=626, TC=626, 10.00*65 + -1000.00*0.0239, 650 + -23
+ 61 Pr=720, Pm=666, T=516, TC=516, 10.00*54 + -1000.00*0.0239, 540 + -23
+ 62 Pr=720, Pm=677, T=406, TC=406, 10.00*43 + -1000.00*0.0239, 430 + -23
+ 63 Pr=720, Pm=689, T=283, TC=283, 10.00*31 + -1000.00*0.0261, 310 + -26
+ 64 Pr=720, Pm=694, T=249, TC=249, 10.00*26 + -1000.00*0.0109, 260 + -10
+ 65 Pr=720, Pm=703, T=150, TC=150, 10.00*17 + -1000.00*0.0196, 170 + -19
+ 66 Pr=720, Pm=708, T=109, TC=109, 10.00*12 + -1000.00*0.0109, 120 + -10
+ 67 Pr=720, Pm=714, T=46, TC=46, 10.00*6 + -1000.00*0.0130, 60 + -13
+ 68 Pr=720, Pm=717, T=45, TC=23, 10.00*3 + -1000.00*0.0065, 30 + -6, no movement
+ 69 Pr=720, Pm=717, T=45, TC=30, 10.00*3 + -1000.00*0.0000, 30 + 0, no movement
+ 70 Pr=720, Pm=720, T=0, TC=0, 10.00*0 + -1000.00*0.0000, 0 + 0
 
 
 3. Using your optimally tuned values for the PD controller running at 1kHz, graph Pm, Pr and T while executing the trajectory: rotate the motor forward 360 degrees, hold for .5 seconds, then rotate backwards for 360 degrees, hold for .5 seconds, rotate forwards for 5 degrees. Be sure to graph the entire trajectory. 
-    0 moving to 360
- 1001 angle 2
- 1503 angle 5
- 2004 angle 11
- 2504 angle 19
- 3006 angle 28
- 3507 angle 39
- 4007 angle 50
- 4509 angle 61
- 5010 angle 73
- 5510 angle 87
- 6012 angle 98
- 6513 angle 112
- 7013 angle 126
- 7515 angle 137
- 8016 angle 151
- 8516 angle 163
- 9018 angle 177
- 9519 angle 188
-10019 angle 202
-10521 angle 213
-11023 angle 227
-11524 angle 239
-12024 angle 253
-12526 angle 267
-13027 angle 278
-13527 angle 289
-14029 angle 300
-14530 angle 312
-15030 angle 323
-15532 angle 329
-16033 angle 337
-16533 angle 343
-17035 angle 348
-18036 angle 351
-18538 angle 354
-19539 angle 357
-21386 delay
-21544 sleep 342ms
-21888 moving to 0
-22046 angle 360
-23047 angle 357
-23549 angle 354
-24050 angle 348
-24550 angle 340
-25052 angle 329
-25553 angle 320
-26053 angle 309
-26555 angle 295
-27056 angle 284
-27556 angle 272
-28058 angle 261
-28559 angle 247
-29059 angle 233
-29561 angle 222
-30062 angle 210
-30562 angle 196
-31064 angle 185
-31565 angle 171
-32065 angle 160
-32567 angle 146
-33069 angle 135
-33570 angle 120
-34070 angle 106
-34572 angle 92
-35073 angle 81
-35573 angle 67
-36075 angle 56
-36576 angle 45
-37076 angle 36
-37578 angle 28
-38079 angle 22
-38579 angle 16
-39081 angle 11
-39582 angle 8
-40082 angle 5
-40584 angle 2
-42758 delay
-43088 sleep 170ms
-43258 moving to 5
-43590 angle 0
-47098 angle 2
-51267 done
 
 4. Run your PD controller at 50Hz and 5Hz while graphing the same variables. Discuss the results.

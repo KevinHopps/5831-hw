@@ -28,6 +28,10 @@ MotorAngle TrajectoryGetTargetAngle(const Trajectory* tp);
 //
 MotorAngle TrajectoryGetCurrentAngle(const Trajectory* tp);
 
+// This returns the most recent velocity in degrees/sec
+//
+float TrajectoryGetVelocity(const Trajectory* tp);
+
 // This enables or disables the Trajectory Interpolator task.
 // The interrupt handler will continue to fire, but this
 // determines whether the handler will actually do anything.

@@ -48,6 +48,7 @@ enum State_
 };
 
 #define PRINT_DELAY 500 // msec delay for print outs
+#define SETTLE_TIME 10
 
 State ProgramTask(CommandIO* ciop, State state)
 {
@@ -93,6 +94,17 @@ State ProgramTask(CommandIO* ciop, State state)
 	
 	case MOVING_TO_360:
 		angle = ContextGetCurrentAngle(ctx);
+		if (angle == 360)
+		{
+			uint32_t stopTime = getMSec() + SETTLE_TIME;
+			while (getMSec() < stopTime && angle == 360)
+			{
+				angle = ContextGetCurrentAngle(ctx);
+				s_println("looping");
+			}
+			if (angle != 360)
+				s_println("OVERSHOT");
+		}
 		
 		if (angle == 360 || (doPrint && lastAnglePrinted != angle))
 		{
@@ -122,6 +134,12 @@ State ProgramTask(CommandIO* ciop, State state)
 		
 	case MOVING_TO_0:
 		angle = ContextGetCurrentAngle(ctx);
+		if (angle == 0)
+		{
+			uint32_t stopTime = getMSec() + SETTLE_TIME;
+			while (getMSec() < stopTime && angle == 0)
+				angle = ContextGetCurrentAngle(ctx);
+		}
 		
 		if (angle == 0 || (doPrint && lastAnglePrinted != angle))
 		{
@@ -151,6 +169,12 @@ State ProgramTask(CommandIO* ciop, State state)
 		
 	case MOVING_TO_5:
 		angle = ContextGetCurrentAngle(ctx);
+		if (angle == 5)
+		{
+			uint32_t stopTime = getMSec() + SETTLE_TIME;
+			while (getMSec() < stopTime && angle == 0)
+				angle = ContextGetCurrentAngle(ctx);
+		}
 		
 		if (angle == 5 || (doPrint && lastAnglePrinted != angle))
 		{

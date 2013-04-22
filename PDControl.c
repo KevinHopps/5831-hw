@@ -207,7 +207,7 @@ void PDControlTask(void* arg)
 			if (ABS(errorAngle) > MAX_ERROR)
 			{
 				pdc->m_calc.m_velocity = (float)deltaAngle / (float)elapsed;
-				torque = pdc->m_kp * errorAngle - pdc->m_kd * pdc->m_calc.m_velocity;
+				torque = pdc->m_kp * errorAngle + pdc->m_kd * pdc->m_calc.m_velocity;
 				pdc->m_calc.m_torqueCalculated = torque;
 
 				pdc->m_calc.m_torqueMagnitudeTooHigh = true; // assume the worst, fix below if ok
