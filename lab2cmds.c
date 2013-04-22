@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include "kmotor.h"
 #include "kserial.h"
+#include "ktimers.h"
 #include "lab2cmds.h"
+#include "kutils.h"
 
 void ContextInit(Context* ctx, Trajectory* tp, PDControl* pdc, Motor* mp)
 {
@@ -49,6 +51,7 @@ int zero_cmd(int argc, char** argv, void* context);
 int go_cmd(int argc, char** argv, void* context);
 int stop_cmd(int argc, char** argv, void* context);
 int xprog_cmd(int argc, char** argv, void* context);
+int clock_cmd(int argc, char** argv, void* context);
 
 void InitCommands(CommandIO* ciop)
 {
@@ -67,6 +70,7 @@ void InitCommands(CommandIO* ciop)
 	CIORegisterCommand(ciop, "go", go_cmd);
 	CIORegisterCommand(ciop, "stop", stop_cmd);
 	CIORegisterCommand(ciop, "xprog", xprog_cmd);
+	CIORegisterCommand(ciop, "clock", clock_cmd);
 }
 
 static void showHint(bool* shown)
@@ -104,6 +108,7 @@ void showHelp()
 		"    go",
 		"    stop",
 		"    xprog {run the canned program}",
+		"    clock period nloops numerator denominator {test the 1 ms timer by setting a period}",
 		0 // sentinel
 	};
 	
@@ -388,5 +393,86 @@ int xprog_cmd(int argc, char** argv, void* context)
 
 	ctx->m_runningProgram = true;
 
+	return 0;
+}
+
+// This function is used to determine the values for the millisecond timer
+// described in ktimers.h.
+//
+extern volatile uint32_t gTimeCounter;
+extern uint16_t gNumerator;
+extern uint16_t gDenominator;
+extern void TimerCallback(void* arg);
+extern uint32_t getMSec();
+volatile uint32_t now;
+
+int clock_cmd(int argc, char** argv, void* context)
+{
+	if (argc != 5)
+		showHelp();
+		
+	uint32_t period = atoi(argv[1]);
+	volatile long nloops = atol(argv[2]);
+	gNumerator = atoi(argv[3]);
+	gDenominator = atoi(argv[4]);
+	//Context* ctx = (Context*)context;
+	
+	BEGIN_ATOMIC
+		setup_CTC_timer(1, period, TimerCallback, (void*)&gTimeCounter);
+		gTimeCounter = 0;
+	END_ATOMIC
+	
+	long i;
+	for (i = 0; i+32 < nloops; i += 32)
+	{
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+		now = getMSec();
+	}
+	
+	for (; i < nloops; ++i)
+	{
+		now = getMSec();
+	}
+	
+	s_println("period=%ld, nloops=%ld, gNumerator=%d, gDenominator=%d, count=%ld",
+		period, nloops, gNumerator, gDenominator, now);
+	
 	return 0;
 }

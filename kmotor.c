@@ -121,7 +121,6 @@ void MotorSetTorque(Motor* motor, MotorTorque torque)
 		}
 
 		setup_PWM_timer2(0);
-		delay_ms(1);		
 		setMotorDirection(forward);
 		uint8_t dutyCycle = (255L * torque) / 1000;
 		setup_PWM_timer2(dutyCycle);

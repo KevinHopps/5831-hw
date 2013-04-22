@@ -13,7 +13,7 @@ void TrajectoryInit(Trajectory* tp, PDControl* pdc, uint16_t msecPeriod)
 	tp->m_targetAngle = 0;
 	tp->m_pdc = pdc;
 
-	setup_CTC_timer0(msecPeriod, TrajectoryTask, tp);
+	setup_CTC_timer(0, msecPeriod*1000L, TrajectoryTask, tp);
 }
 
 // This adjusts the current target angle. The TrajectoryTask will

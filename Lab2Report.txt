@@ -1,3 +1,15 @@
+General Discussion for Lab 2
+----------------------------
+For this lab, I setup the following tasks.
+The Trajectory Interpolator, running in the ISR for timer 0, a 10ms CTC timer.
+The PDController, running in the ISR for timer 3, a 20ms CTC timer.
+A millisecond timer, accurate to within %0.03, running in the ISR for timer 1, a 100us CTC timer.
+A console user interface task, running in the main loop.
+
+General functions for setting up CTC timers are in ktimers.[ch]
+
+Questions
+---------
 1. Experiment with the speed of the motor: Run your motor at full speed. Modify your gains to achieve position control at that speed (as best you can). Slow the motor down as much as possible. Modify your gains to acheive position control. Repeat with one or two speeds in between. For each, record the approximate speed in rotations per second, record your equation (gains), and report on the behavior of the system and your ability to control the position.
 
 My program allows dynamic setting of the period of the PDControl task. At 1 KHz, a period of 1 msec, the speed is not interesting because it is always measured as 0. You recommended checking the speed only sometimes during the task, but doing it this way means that you are setting new torque every 1 msec but using a speed that was determined in the past. I opted instead to modify the period of the PDControl task. I experimented with this period, and a 100 msec there is significant overshoot in positioning, but at 10 msec the positioning is clean, and there is a measurable velocity. So I went with 10 msec.
@@ -159,5 +171,88 @@ The controller is requires no special tuning for different step sizes. Here is s
 
 
 3. Using your optimally tuned values for the PD controller running at 1kHz, graph Pm, Pr and T while executing the trajectory: rotate the motor forward 360 degrees, hold for .5 seconds, then rotate backwards for 360 degrees, hold for .5 seconds, rotate forwards for 5 degrees. Be sure to graph the entire trajectory. 
+    0 moving to 360
+ 1001 angle 2
+ 1503 angle 5
+ 2004 angle 11
+ 2504 angle 19
+ 3006 angle 28
+ 3507 angle 39
+ 4007 angle 50
+ 4509 angle 61
+ 5010 angle 73
+ 5510 angle 87
+ 6012 angle 98
+ 6513 angle 112
+ 7013 angle 126
+ 7515 angle 137
+ 8016 angle 151
+ 8516 angle 163
+ 9018 angle 177
+ 9519 angle 188
+10019 angle 202
+10521 angle 213
+11023 angle 227
+11524 angle 239
+12024 angle 253
+12526 angle 267
+13027 angle 278
+13527 angle 289
+14029 angle 300
+14530 angle 312
+15030 angle 323
+15532 angle 329
+16033 angle 337
+16533 angle 343
+17035 angle 348
+18036 angle 351
+18538 angle 354
+19539 angle 357
+21386 delay
+21544 sleep 342ms
+21888 moving to 0
+22046 angle 360
+23047 angle 357
+23549 angle 354
+24050 angle 348
+24550 angle 340
+25052 angle 329
+25553 angle 320
+26053 angle 309
+26555 angle 295
+27056 angle 284
+27556 angle 272
+28058 angle 261
+28559 angle 247
+29059 angle 233
+29561 angle 222
+30062 angle 210
+30562 angle 196
+31064 angle 185
+31565 angle 171
+32065 angle 160
+32567 angle 146
+33069 angle 135
+33570 angle 120
+34070 angle 106
+34572 angle 92
+35073 angle 81
+35573 angle 67
+36075 angle 56
+36576 angle 45
+37076 angle 36
+37578 angle 28
+38079 angle 22
+38579 angle 16
+39081 angle 11
+39582 angle 8
+40082 angle 5
+40584 angle 2
+42758 delay
+43088 sleep 170ms
+43258 moving to 5
+43590 angle 0
+47098 angle 2
+51267 done
 
 4. Run your PD controller at 50Hz and 5Hz while graphing the same variables. Discuss the results.

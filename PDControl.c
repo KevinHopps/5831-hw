@@ -5,6 +5,7 @@
 #include "kutils.h"
 #include "PDControl.h"
 #include "kmotor.h"
+#include "ktimers.h"
 
 void TorqueCalcInit(TorqueCalc* tcp)
 {
@@ -67,7 +68,7 @@ void PDControlSetPeriod(PDControl* pdc, uint16_t periodMSec)
 {
 	BEGIN_ATOMIC
 		pdc->m_period = periodMSec;
-		setup_CTC_timer3(pdc->m_period, PDControlTask, pdc);
+		setup_CTC_timer(3, pdc->m_period*1000L, PDControlTask, pdc);
 	END_ATOMIC
 }
 
@@ -178,7 +179,7 @@ void PDControlTask(void* arg)
 		return;
 		
 	MotorAngle currentAngle = MotorGetCurrentAngle(pdc->m_motor);
-	uint32_t currentMSec = get_ms();
+	uint32_t currentMSec = getMSec();
 	
 	if (!pdc->m_ready)
 		pdc->m_ready = true;

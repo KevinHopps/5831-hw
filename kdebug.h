@@ -5,7 +5,6 @@
 //
 
 void die(const char* msg); // displays a message and stops
-void beep(); // makes a short beep noise
 
 // This tests the condition and, if false, displays a message and stops.
 //

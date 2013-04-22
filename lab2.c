@@ -47,25 +47,27 @@ enum State_
 	DONE
 };
 
-#define PRINT_DELAY 10 // msec delay for print outs
+#define PRINT_DELAY 500 // msec delay for print outs
 
-State ProgramTask(CommandIO* ciop)
+State ProgramTask(CommandIO* ciop, State state)
 {
-	static State state = READY;
 	static uint32_t startTime;
 	static uint32_t delayBegin;
 	static uint32_t lastPrint;
+	static MotorAngle lastAnglePrinted;
 	
-	return DONE; // debug, for now
+	if (state == READY)
+		resetMSecTimer();
 	
 	Context* ctx = (Context*)ciop->m_context;
 	ctx->m_logging = false;
 	MotorAngle angle;
 	
 	bool doPrint = false;
-	uint32_t now = get_ms();
+	uint32_t now = getMSec();
 	if (state == READY)
 	{
+		lastAnglePrinted = 0;
 		startTime = now;
 		lastPrint = now;
 		doPrint = true;
@@ -81,70 +83,86 @@ State ProgramTask(CommandIO* ciop)
 	switch (state)
 	{
 	case READY:
-		s_println("");
-		s_println("%4ld begin", elapsed);
 		lastPrint = now;
+		MotorResetCurrentAngle(ctx->m_motor);
 		ContextSetTargetAngle(ctx, 360);
 		state = MOVING_TO_360;
+		s_println("");
+		s_println("%5ld moving to 360", elapsed);
 		break;
 	
 	case MOVING_TO_360:
 		angle = ContextGetCurrentAngle(ctx);
 		
-		if (doPrint)
-			s_println("%4ld angle %d", elapsed, angle);
+		if (angle == 360 || (doPrint && lastAnglePrinted != angle))
+		{
+			lastAnglePrinted = angle;
+			s_println("%5ld angle %d", elapsed, angle);
+		}
 			
 		if (angle == 360)
 		{
-			state = FIRST_DELAY;
 			delayBegin = now;
+			state = FIRST_DELAY;
+			s_println("%5ld delay", elapsed);
 		}
 		break;
 		
 	case FIRST_DELAY:
 		if (doPrint)
-			s_println("%4ld sleep %ldms", elapsed, 500-(now-delayBegin));
+			s_println("%5ld sleep %ldms", elapsed, 500-(now-delayBegin));
+			
 		if (now - delayBegin >= 500)
 		{
 			ContextSetTargetAngle(ctx, 0);
 			state = MOVING_TO_0;
+			s_println("%5ld moving to 0", elapsed);
 		}
 		break;
 		
 	case MOVING_TO_0:
 		angle = ContextGetCurrentAngle(ctx);
 		
-		if (doPrint)
-			s_println("%4ld angle %d", elapsed, angle);
+		if (angle == 0 || (doPrint && lastAnglePrinted != angle))
+		{
+			lastAnglePrinted = angle;
+			s_println("%5ld angle %d", elapsed, angle);
+		}
 			
 		if (angle == 0)
 		{
-			state = SECOND_DELAY;
 			delayBegin = now;
+			state = SECOND_DELAY;
+			s_println("%5ld delay", elapsed);
 		}
 		break;
 		
 	case SECOND_DELAY:
 		if (doPrint)
-			s_println("%4ld sleep %ldms", elapsed, 500-(now-delayBegin));
+			s_println("%5ld sleep %ldms", elapsed, 500-(now-delayBegin));
+			
 		if (now - delayBegin >= 500)
 		{
 			ContextSetTargetAngle(ctx, 5);
 			state = MOVING_TO_5;
+			s_println("%5ld moving to 5", elapsed);
 		}
 		break;
 		
 	case MOVING_TO_5:
 		angle = ContextGetCurrentAngle(ctx);
 		
-		if (doPrint)
-			s_println("%4ld angle %d", elapsed, angle);
+		if (angle == 5 || (doPrint && lastAnglePrinted != angle))
+		{
+			lastAnglePrinted = angle;
+			s_println("%5ld angle %d", elapsed, angle);
+		}
 			
-		if (angle == 0)
+		if (angle == 5)
 		{
 			state = DONE;
 			delayBegin = now;
-			s_println("%4ld done", elapsed);
+			s_println("%5ld done", elapsed);
 		}
 		break;
 		
@@ -161,12 +179,19 @@ State ProgramTask(CommandIO* ciop)
 //
 void ConsoleTask(CommandIO* ciop)
 {
+	static State programState = READY;
 	Context* ctx = (Context*)ciop->m_context;
 	
 	if (ctx->m_runningProgram)
 	{
-		if (ProgramTask(ciop) == DONE)
+		if (programState == DONE)
+			programState = READY;
+			
+		programState = ProgramTask(ciop, programState);
+		
+		if (programState == DONE)
 			ctx->m_runningProgram = false;
+			
 		if (ctx->m_runningProgram)
 			return;
 	}
@@ -194,49 +219,54 @@ void ConsoleTask(CommandIO* ciop)
 			//
 			lastTorqueCalc = tc;
 			
-			// Minimally, we print out Pr, Pm, and T
-			//
 			if (ctx->m_counter++ == 0)
 				s_println("");
+				
 			s_printf("%3d Pr=%ld, Pm=%ld, T=%d", ctx->m_counter, tc.m_Pr, tc.m_Pm, tc.m_torqueUsed);
-			if (tc.m_torqueUsed != tc.m_torqueCalculated)
-			{
-				// Sometimes the calculation generates a torque that is
-				// unusable for some reason. This explains why.
-				// This is the calculated torque and the Kp value, as
-				// a float.
-				//
-				s_printf(", TC=%ld, %s", tc.m_torqueCalculated, s_ftos(tc.m_Kp, 2));
+
+			// Sometimes the calculation generates a torque that is
+			// unusable for some reason. This explains why.
+			// This is the calculated torque and the Kp value, as
+			// a float.
+			//
+			s_printf(", TC=%ld, %s", tc.m_torqueCalculated, s_ftos(tc.m_Kp, 2));
+			
+			// This is the error (Pr - Pm) and the Kd value, as a float.
+			//
+			s_printf("*%ld + %s", (long)(tc.m_Pr - tc.m_Pm), s_ftos(tc.m_Kd, 2));
+			
+			// This is the velocity, as a float.
+			//
+			s_printf("*%s", s_ftos(tc.m_velocity, 4));
+			
+			// This multiplies the terms out and displays them
+			//
+			int16_t tp = (tc.m_Pr - tc.m_Pm) * tc.m_Kp;
+			float tdf = tc.m_velocity * tc.m_Kd;
+			int16_t td = (int32_t)tdf;
+			s_printf(", %d + %d", tp, td);
+			
+			// The PDController caps the change in torque that is allowed,
+			// in order to prevent jerky motion. This reports if that capping
+			// was done.
+			//
+			if (tc.m_torqueChangeTooHigh)
+				s_printf(", rapid acc");
 				
-				// This is the error (Pr - Pm) and the Kd value, as a float.
-				//
-				s_printf("*%ld + %s", (long)(tc.m_Pr - tc.m_Pm), s_ftos(tc.m_Kd, 2));
+			// If the forumla calculated a torque that was higher in
+			// magnitude (positive or negative) than is allowed, this
+			// is reported here.
+			// 
+			if (tc.m_torqueMagnitudeTooHigh)
+				s_printf(", exceeds max");
 				
-				// This is the velocity, as a float.
-				//
-				s_printf("*%s", s_ftos(tc.m_velocity, 2));
-				
-				// The PDController caps the change in torque that is allowed,
-				// in order to prevent jerky motion. This reports if that capping
-				// was done.
-				//
-				if (tc.m_torqueChangeTooHigh)
-					s_printf(", rapid acc");
-					
-				// If the forumla calculated a torque that was higher in
-				// magnitude (positive or negative) than is allowed, this
-				// is reported here.
-				// 
-				if (tc.m_torqueMagnitudeTooHigh)
-					s_printf(", exceeds max");
-					
-				// If the formula calculated a torque that is too small
-				// in magnitude to produce motion, the PDController will
-				// increase its magnitude to the minimum that does move.
-				// That is reported here.
-				if (tc.m_torqueMagnitudeTooLow)
-					s_printf(", no movement");
-			}
+			// If the formula calculated a torque that is too small
+			// in magnitude to produce motion, the PDController will
+			// increase its magnitude to the minimum that does move.
+			// That is reported here.
+			if (tc.m_torqueMagnitudeTooLow)
+				s_printf(", no movement");
+
 			s_println("");
 		}
 	}
@@ -294,6 +324,8 @@ int main()
 	ContextSetTasksRunning(&commandContext, true); // start Trajectory Interpolator and PDControl
 	ContextSetMaxAccel(&commandContext, 4); // max acceleration is 1/4 top speed
 	
+	setupMSecTimer(1); // setup timer 1 as a millisecond timer.
+	
 	// Print a welcome message and a hint at how to get help.
 	//
 	showInfo(&commandContext);
@@ -305,8 +337,6 @@ int main()
 	// anything until the "go" command is received.
 	//
 	setInterruptsEnabled(true);
-	
-	time_reset();
 	
 	while (true)
 	{
